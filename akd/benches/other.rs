@@ -132,10 +132,7 @@ fn bench_vrf_verify<TC: NamedConfiguration>(c: &mut Criterion) {
 group_config!(other_benches, bench_put, bench_vrf_prove, bench_vrf_eval, bench_vrf_verify);
 
 fn main() {
-    // NOTE(new_config): Add a new configuration here
-
     #[cfg(feature = "whatsapp_v1")]
     other_benches_whatsapp_v1_config();
-
     Criterion::default().configure_from_args().final_summary();
 }
