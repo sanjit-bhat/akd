@@ -17,40 +17,39 @@ use akd::storage::manager::StorageManager;
 use akd::storage::memory::AsyncInMemoryDatabase;
 use akd::NamedConfiguration;
 use akd::{AkdLabel, AkdValue, Directory};
-use akd_core::{AzksElement, AzksValue, NodeLabel};
 use akd_core::hash::EMPTY_DIGEST;
+use akd_core::{AzksElement, AzksValue, NodeLabel};
 use criterion::{BatchSize, Criterion};
 use rand::distributions::Alphanumeric;
 use rand::rngs::StdRng;
 use rand::{Rng, RngCore, SeedableRng};
 
-bench_config!(bench_put);
-fn bench_put<TC: NamedConfiguration>(c: &mut Criterion) {
+/*
+bench_config!(bench_serv_put);
+fn bench_serv_put<TC: NamedConfiguration>(c: &mut Criterion) {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_time()
         .build()
         .unwrap();
+    let rng = StdRng::seed_from_u64(42);
+    let db = AsyncInMemoryDatabase::new();
+    let vrf = HardCodedAkdVRF {};
+    let store = StorageManager::new_no_cache(db);
+    let dir = runtime
+        .block_on(async move {
+            Directory::<TC, _, _>::new(store, vrf, AzksParallelismConfig::disabled()).await
+        })
+        .unwrap();
 
-    c.bench_function("bench_put", move |b| {
+    c.bench_function("bench_serv_put", move |b| {
         b.iter_batched(
-            || {
-                let rng = StdRng::seed_from_u64(42);
-                let database = AsyncInMemoryDatabase::new();
-                let vrf = HardCodedAkdVRF {};
-                let db = StorageManager::new_no_cache(database);
-                let directory = runtime
-                    .block_on(async move {
-                        Directory::<TC, _, _>::new(db, vrf, AzksParallelismConfig::disabled()).await
-                    })
-                    .unwrap();
-                directory
-            },
-            |directory| {
+            || dir.clone(),
+            |dir| {
                 let data = vec![(AkdLabel::from("User 0"), AkdValue::from("pk"))];
-                runtime.block_on(directory.publish(data)).unwrap();
+                runtime.block_on(dir.publish(data)).unwrap();
                 let (proof, _) =
                     runtime
-                        .block_on(directory.key_history(
+                        .block_on(dir.key_history(
                             &AkdLabel::from("User 0"),
                             akd::HistoryParams::MostRecent(1),
                         ))
@@ -63,25 +62,33 @@ fn bench_put<TC: NamedConfiguration>(c: &mut Criterion) {
         );
     });
 }
+*/
 
-bench_config!(bench_merkle_put);
-fn bench_merkle_put<TC: NamedConfiguration>(c: &mut Criterion) {
+bench_config!(bench_merkle_put_no_proof);
+fn bench_merkle_put_no_proof<TC: NamedConfiguration>(c: &mut Criterion) {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_time()
         .build()
         .unwrap();
+    let mut rng = StdRng::seed_from_u64(42);
+    let database = AsyncInMemoryDatabase::new();
+    let vrf = HardCodedAkdVRF {};
+    let db = StorageManager::new_no_cache(database);
+    let mut tree = runtime.block_on(Azks::new::<TC, _>(&db)).unwrap();
+    let seed_data = gen_rand_azks_elems(1000, &mut rng);
+    runtime
+        .block_on(tree.batch_insert_nodes::<TC, _>(
+            &db,
+            seed_data,
+            InsertMode::Directory,
+            AzksParallelismConfig::disabled(),
+        ))
+        .unwrap();
 
-    c.bench_function("bench_merkle_put", move |b| {
+    c.bench_function("bench_merkle_put_no_proof", move |b| {
         b.iter_batched(
-            || {
-                let rng = StdRng::seed_from_u64(42);
-                let database = AsyncInMemoryDatabase::new();
-                let vrf = HardCodedAkdVRF {};
-                let db = StorageManager::new_no_cache(database);
-                let tree = runtime.block_on(Azks::new::<TC, _>(&db)).unwrap();
-                (rng, db, tree)
-            },
-            |(mut rng, db, mut tree)| {
+            || {},
+            |_| {
                 let data = gen_rand_azks_elems(1, &mut rng);
                 runtime
                     .block_on(tree.batch_insert_nodes::<TC, _>(
@@ -90,6 +97,120 @@ fn bench_merkle_put<TC: NamedConfiguration>(c: &mut Criterion) {
                         InsertMode::Directory,
                         AzksParallelismConfig::disabled(),
                     ))
+                    .unwrap();
+            },
+            BatchSize::PerIteration,
+        );
+    });
+}
+
+bench_config!(bench_merkle_put_with_proof);
+fn bench_merkle_put_with_proof<TC: NamedConfiguration>(c: &mut Criterion) {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_time()
+        .build()
+        .unwrap();
+    let mut rng = StdRng::seed_from_u64(42);
+    let database = AsyncInMemoryDatabase::new();
+    let vrf = HardCodedAkdVRF {};
+    let db = StorageManager::new_no_cache(database);
+    let mut tree = runtime.block_on(Azks::new::<TC, _>(&db)).unwrap();
+    let seed_data = gen_rand_azks_elems(1000, &mut rng);
+    runtime
+        .block_on(tree.batch_insert_nodes::<TC, _>(
+            &db,
+            seed_data,
+            InsertMode::Directory,
+            AzksParallelismConfig::disabled(),
+        ))
+        .unwrap();
+
+    c.bench_function("bench_merkle_put_with_proof", move |b| {
+        b.iter_batched(
+            || {},
+            |_| {
+                let data = gen_rand_azks_elems(1, &mut rng);
+                let data0 = data[0].clone();
+                runtime
+                    .block_on(tree.batch_insert_nodes::<TC, _>(
+                        &db,
+                        data,
+                        InsertMode::Directory,
+                        AzksParallelismConfig::disabled(),
+                    ))
+                    .unwrap();
+                runtime
+                    .block_on(tree.get_membership_proof::<TC, _>(&db, data0.label))
+                    .unwrap();
+            },
+            BatchSize::PerIteration,
+        );
+    });
+}
+
+bench_config!(bench_merkle_get_memb);
+fn bench_merkle_get_memb<TC: NamedConfiguration>(c: &mut Criterion) {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_time()
+        .build()
+        .unwrap();
+    let mut rng = StdRng::seed_from_u64(42);
+    let database = AsyncInMemoryDatabase::new();
+    let vrf = HardCodedAkdVRF {};
+    let db = StorageManager::new_no_cache(database);
+    let mut tree = runtime.block_on(Azks::new::<TC, _>(&db)).unwrap();
+    let seed_data = gen_rand_azks_elems(1000, &mut rng);
+    let data0 = seed_data[0].clone();
+    runtime
+        .block_on(tree.batch_insert_nodes::<TC, _>(
+            &db,
+            seed_data,
+            InsertMode::Directory,
+            AzksParallelismConfig::disabled(),
+        ))
+        .unwrap();
+
+    c.bench_function("bench_merkle_get_memb", move |b| {
+        b.iter_batched(
+            || {},
+            |_| {
+                runtime
+                    .block_on(tree.get_membership_proof::<TC, _>(&db, data0.label))
+                    .unwrap();
+            },
+            BatchSize::PerIteration,
+        );
+    });
+}
+
+bench_config!(bench_merkle_get_nonmemb);
+fn bench_merkle_get_nonmemb<TC: NamedConfiguration>(c: &mut Criterion) {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_time()
+        .build()
+        .unwrap();
+    let mut rng = StdRng::seed_from_u64(42);
+    let database = AsyncInMemoryDatabase::new();
+    let vrf = HardCodedAkdVRF {};
+    let db = StorageManager::new_no_cache(database);
+    let mut tree = runtime.block_on(Azks::new::<TC, _>(&db)).unwrap();
+    let seed_data = gen_rand_azks_elems(1000, &mut rng);
+    runtime
+        .block_on(tree.batch_insert_nodes::<TC, _>(
+            &db,
+            seed_data,
+            InsertMode::Directory,
+            AzksParallelismConfig::disabled(),
+        ))
+        .unwrap();
+    let query = gen_rand_azks_elems(1, &mut rng)[0];
+
+    c.bench_function("bench_merkle_get_nonmemb", move |b| {
+        b.iter_batched(
+            || query.clone(),
+            |query| {
+                runtime
+                    .block_on(tree.get_non_membership_proof::<TC, _>(&db, query.label))
                     .unwrap();
             },
             BatchSize::PerIteration,
@@ -118,7 +239,14 @@ fn random_label(rng: &mut StdRng) -> NodeLabel {
     }
 }
 
-group_config!(other_benches, bench_put, bench_merkle_put);
+group_config!(
+    other_benches,
+    /* bench_serv_put, */
+    bench_merkle_put_no_proof,
+    bench_merkle_put_with_proof,
+    bench_merkle_get_memb,
+    bench_merkle_get_nonmemb,
+);
 
 fn main() {
     #[cfg(feature = "whatsapp_v1")]
