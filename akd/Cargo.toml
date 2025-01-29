@@ -94,6 +94,11 @@ akd = { path = ".", features = [
 ], default-features = false }
 
 [[bench]]
-name = "other"
+name = "azks"
+harness = false
+required-features = ["bench"]
+
+[[bench]]
+name = "directory"
 harness = false
 required-features = ["bench"]
