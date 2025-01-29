@@ -22,13 +22,10 @@ const NSEED: usize = 1_000_000;
 
 #[test]
 fn test_bench_prove() -> Result<(), AkdError> {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_time()
-        .build()
-        .unwrap();
+    let rt = tokio::runtime::Builder::new_multi_thread().build().unwrap();
     let mut rng = StdRng::seed_from_u64(42);
     let db = AsyncInMemoryDatabase::new();
-    let store = StorageManager::new_no_cache(db);
+    let store = StorageManager::new(db, None, None, None);
 
     let mut tr = rt
         .block_on(Azks::new::<WhatsAppV1Configuration, _>(&store))
