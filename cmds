@@ -1,0 +1,3 @@
+cargo test -r -F bench -p akd --no-run bench
+samply record --save-only -o prof.json -- ./target/release/deps/akd-6a3041934f2798a8 --show-output bench
+samply load prof.json
