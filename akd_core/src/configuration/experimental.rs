@@ -11,9 +11,10 @@ use core::marker::PhantomData;
 
 use super::traits::DomainLabel;
 use crate::configuration::Configuration;
-use crate::hash::{Digest, DIGEST_BYTES};
+use crate::hash::DIGEST_BYTES;
 use crate::utils::i2osp_array;
 use crate::{AkdLabel, AkdValue, AzksValue, AzksValueWithEpoch, NodeLabel, VersionFreshness};
+use sha2::{Digest, Sha256};
 
 #[cfg(feature = "nostd")]
 use alloc::vec::Vec;
@@ -38,7 +39,7 @@ impl<L: DomainLabel> ExperimentalConfiguration<L> {
 impl<L: DomainLabel> Configuration for ExperimentalConfiguration<L> {
     fn hash(item: &[u8]) -> crate::hash::Digest {
         // Hash(domain label || item)
-        let mut hasher = blake3::Hasher::new();
+        let mut hasher = Sha256::new();
         hasher.update(L::domain_label());
         hasher.update(item);
         hasher.finalize().into()
@@ -75,7 +76,7 @@ impl<L: DomainLabel> Configuration for ExperimentalConfiguration<L> {
         label: &NodeLabel,
         _version: u64,
         _value: &AkdValue,
-    ) -> Digest {
+    ) -> crate::hash::Digest {
         Self::hash(&[commitment_key, &label.to_bytes()].concat())
     }
 
@@ -142,7 +143,7 @@ impl<L: DomainLabel> Configuration for ExperimentalConfiguration<L> {
 
     /// Given the top-level hash, compute the "actual" root hash that is published
     /// by the directory maintainer
-    fn compute_root_hash_from_val(root_val: &AzksValue) -> Digest {
+    fn compute_root_hash_from_val(root_val: &AzksValue) -> crate::hash::Digest {
         root_val.0
     }
 
