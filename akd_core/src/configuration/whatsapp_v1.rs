@@ -8,12 +8,11 @@
 //! Defines the WhatsApp v1 configuration
 
 use crate::configuration::Configuration;
-use crate::hash::DIGEST_BYTES;
+use crate::hash::{Digest, DIGEST_BYTES};
 use crate::utils::i2osp_array;
 use crate::{
     AkdLabel, AkdValue, AzksValue, AzksValueWithEpoch, NodeLabel, VersionFreshness, EMPTY_VALUE,
 };
-use sha2::{Digest, Sha256};
 
 #[cfg(feature = "nostd")]
 use alloc::vec::Vec;
@@ -37,7 +36,7 @@ impl WhatsAppV1Configuration {
 
 impl Configuration for WhatsAppV1Configuration {
     fn hash(item: &[u8]) -> crate::hash::Digest {
-        Sha256::digest(item).into()
+        ::blake3::hash(item).into()
     }
 
     fn empty_root_value() -> AzksValue {
@@ -77,7 +76,7 @@ impl Configuration for WhatsAppV1Configuration {
         label: &NodeLabel,
         version: u64,
         value: &AkdValue,
-    ) -> crate::hash::Digest {
+    ) -> Digest {
         Self::hash(
             &[
                 commitment_key,
@@ -156,7 +155,7 @@ impl Configuration for WhatsAppV1Configuration {
 
     /// Given the top-level hash, compute the "actual" root hash that is published
     /// by the directory maintainer
-    fn compute_root_hash_from_val(root_val: &AzksValue) -> crate::hash::Digest {
+    fn compute_root_hash_from_val(root_val: &AzksValue) -> Digest {
         Self::hash(&[&root_val.0[..], &NodeLabel::root().value::<Self>()].concat())
     }
 
