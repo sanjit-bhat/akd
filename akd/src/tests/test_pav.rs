@@ -1,56 +1,119 @@
-// Copyright (c) Meta Platforms, Inc. and affiliates.
-//
-// This source code is dual-licensed under either the MIT license found in the
-// LICENSE-MIT file in the root directory of this source tree or the Apache
-// License, Version 2.0 found in the LICENSE-APACHE file in the root directory
-// of this source tree. You may select, at your option, one of the above-listed licenses.
-
 use std::time::Instant;
 
-use akd_core::{hash::EMPTY_DIGEST, AzksElement, AzksValue, NodeLabel};
+use akd_core::ecvrf::HardCodedAkdVRF as VRF;
+use akd_core::verify::history::HistoryParams;
+use akd_core::verify::{key_history_verify, lookup_verify, HistoryVerificationParams};
+use akd_core::{AkdLabel, AkdValue, AzksElement, AzksValue, NodeLabel};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
-use crate::{
+use akd::storage::memory::AsyncInMemoryDatabase as DB;
+use akd::{
     append_only_zks::{AzksParallelismConfig, InsertMode},
-    errors::AkdError,
     storage::{manager::StorageManager, memory::AsyncInMemoryDatabase},
-    Azks,
+    Azks, Directory,
 };
-use akd_core::WhatsAppV1Configuration;
+use akd_core::WhatsAppV1Configuration as TC;
+
+use crate::auditor::audit_verify;
 
 const NSEED: usize = 1_000_000;
+const DEFAULT_DIG: [u8; 32] = [2; 32];
 
-#[test]
-fn test_bench_prove() -> Result<(), AkdError> {
-    let rt = tokio::runtime::Builder::new_multi_thread().build().unwrap();
-    let mut rng = StdRng::seed_from_u64(42);
-    let db = AsyncInMemoryDatabase::new();
-    let store = StorageManager::new(db, None, None, None);
+// get key and verify proof.
+#[tokio::test(flavor = "multi_thread")]
+async fn bench_serv_get() {
+    let (mut _rng, dir, labels) = seed_dir().await;
+    let vrf_pk = dir.get_public_key().await.unwrap();
+    const NOPS: usize = 1_000;
 
-    let mut tr = rt
-        .block_on(Azks::new::<WhatsAppV1Configuration, _>(&store))
-        .unwrap();
-    let seed = gen_rand_azks_elems(NSEED, &mut rng);
-    rt.block_on(tr.batch_insert_nodes::<WhatsAppV1Configuration, _>(
-        &store,
-        seed,
-        InsertMode::Directory,
-        AzksParallelismConfig::disabled(),
-    ))
-    .unwrap();
+    let start = Instant::now();
+    for i in 0..NOPS {
+        let l = &labels[i % NSEED];
+        let (p, dig) = dir.lookup(l.clone()).await.unwrap();
+        // note: each key only has one version.
+        // note: run sequentially.
+        lookup_verify::<TC>(vrf_pk.as_bytes(), dig.hash(), dig.epoch(), l.clone(), p).unwrap();
+    }
+    let total = start.elapsed();
 
-    const NOPS: usize = 1_000_000;
-    let mut label = [0; 32];
+    println!("nOps: {}", NOPS);
+    let m0 = (total.as_micros() as f64) / (NOPS as f64);
+    println!("us/op: {}", m0);
+    println!("ms: {}", total.as_millis());
+}
+
+// put key and verify proof, just for that version.
+#[tokio::test(flavor = "multi_thread")]
+async fn bench_serv_put() {
+    let (mut rng, dir, _labels) = seed_dir().await;
+    let vrf_pk = dir.get_public_key().await.unwrap();
+    const NOPS: usize = 1_000;
 
     let start = Instant::now();
     for _ in 0..NOPS {
-        rng.fill(&mut label);
-        // TODO: there's alloc here.
-        let l = NodeLabel {
-            label_val: label,
-            label_len: 256,
-        };
-        rt.block_on(tr.get_non_membership_proof::<WhatsAppV1Configuration, _>(&store, l))
+        let l = AkdLabel::random(&mut rng);
+        let elem = vec![(l.clone(), AkdValue(vec![2]))];
+        dir.publish(elem).await.unwrap();
+        let (p, dig) = dir
+            .key_history(&l, HistoryParams::MostRecent(1))
+            .await
+            .unwrap();
+        // TODO: is it comparable to only check latest here?
+        // if auditor ensures mono, i think?
+        key_history_verify::<TC>(
+            vrf_pk.as_bytes(),
+            dig.hash(),
+            dig.epoch(),
+            l,
+            p,
+            HistoryVerificationParams::default(),
+        )
+        .unwrap();
+    }
+    let total = start.elapsed();
+
+    println!("nOps: {}", NOPS);
+    let m0 = (total.as_micros() as f64) / (NOPS as f64);
+    println!("us/op: {}", m0);
+    println!("ms: {}", total.as_millis());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn bench_audit() {
+    let (mut rng, dir, _) = seed_dir().await;
+    let start_eph = dir.get_epoch_hash().await.unwrap();
+    const NINSERT: usize = 1_000;
+    let new_els: Vec<(AkdLabel, AkdValue)> = (0..NINSERT)
+        .map(|_| (AkdLabel::random(&mut rng), AkdValue(vec![2])))
+        .collect();
+    let end_eph = dir.publish(new_els).await.unwrap();
+
+    const NOPS: usize = 100;
+    let start = Instant::now();
+    for _ in 0..NOPS {
+        let p = dir.audit(start_eph.epoch(), end_eph.epoch()).await.unwrap();
+        audit_verify::<TC>(vec![start_eph.hash(), end_eph.hash()], p)
+            .await
+            .unwrap();
+    }
+    let total = start.elapsed();
+
+    println!("nOps: {}", NOPS);
+    let m0 = (total.as_millis() as f64) / (NOPS as f64);
+    println!("ms/op: {}", m0);
+    println!("ms: {}", total.as_millis());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn bench_merk_prove() {
+    let (mut rng, store, tr) = seed_tr().await;
+    const NOPS: usize = 100_000;
+
+    let start = Instant::now();
+    for _ in 0..NOPS {
+        let l = rand_label(&mut rng);
+        tr.get_non_membership_proof::<TC, _>(&store, l)
+            .await
             .unwrap();
     }
     let total = start.elapsed();
@@ -59,24 +122,79 @@ fn test_bench_prove() -> Result<(), AkdError> {
     let m0 = (total.as_nanos() as f64) / (NOPS as f64);
     println!("ns/op: {}", m0);
     println!("ms: {}", total.as_millis());
-
-    Ok(())
 }
 
-fn gen_rand_azks_elems(num_nodes: usize, rng: &mut StdRng) -> Vec<AzksElement> {
-    (0..num_nodes)
-        .map(|_| {
-            let label = random_label(rng);
-            let value = EMPTY_DIGEST;
-            AzksElement {
-                label,
-                value: AzksValue(value),
-            }
+#[tokio::test(flavor = "multi_thread")]
+async fn bench_merk_put() {
+    let (mut rng, store, mut tr) = seed_tr().await;
+    const NOPS: usize = 100_000;
+
+    let start = Instant::now();
+    for _ in 0..NOPS {
+        let elems = vec![AzksElement {
+            label: rand_label(&mut rng),
+            value: AzksValue(DEFAULT_DIG),
+        }];
+        tr.batch_insert_nodes::<TC, _>(
+            &store,
+            elems,
+            InsertMode::Directory,
+            AzksParallelismConfig::disabled(),
+        )
+        .await
+        .unwrap();
+    }
+    let total = start.elapsed();
+
+    println!("nOps: {}", NOPS);
+    let m0 = (total.as_nanos() as f64) / (NOPS as f64);
+    println!("ns/op: {}", m0);
+    println!("ms: {}", total.as_millis());
+}
+
+async fn seed_tr() -> (StdRng, StorageManager<AsyncInMemoryDatabase>, Azks) {
+    let mut rng = StdRng::seed_from_u64(42);
+    let db = AsyncInMemoryDatabase::new();
+    let store = StorageManager::new_no_cache(db);
+
+    let mut tr = Azks::new::<TC, _>(&store).await.unwrap();
+    let seed: Vec<AzksElement> = (0..NSEED)
+        .map(|_| AzksElement {
+            label: rand_label(&mut rng),
+            value: AzksValue(DEFAULT_DIG),
         })
-        .collect()
+        .collect();
+    tr.batch_insert_nodes::<TC, _>(
+        &store,
+        seed,
+        InsertMode::Directory,
+        AzksParallelismConfig::disabled(),
+    )
+    .await
+    .unwrap();
+    (rng, store, tr)
 }
 
-fn random_label(rng: &mut StdRng) -> NodeLabel {
+async fn seed_dir() -> (StdRng, Directory<TC, DB, VRF>, Vec<AkdLabel>) {
+    let mut rng = StdRng::seed_from_u64(42);
+    let db = AsyncInMemoryDatabase::new();
+    let store = StorageManager::new_no_cache(db);
+    let vrf = VRF {};
+    let dir = Directory::<TC, _, _>::new(store.clone(), vrf, AzksParallelismConfig::disabled())
+        .await
+        .unwrap();
+
+    let labels: Vec<AkdLabel> = (0..NSEED).map(|_| AkdLabel::random(&mut rng)).collect();
+    let seed: Vec<(AkdLabel, AkdValue)> = labels
+        .clone()
+        .into_iter()
+        .map(|l| (l, AkdValue(vec![2])))
+        .collect();
+    dir.publish(seed).await.unwrap();
+    (rng, dir, labels)
+}
+
+fn rand_label(rng: &mut StdRng) -> NodeLabel {
     NodeLabel {
         label_val: rng.gen::<[u8; 32]>(),
         label_len: 256,

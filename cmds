@@ -1,3 +1,5 @@
 cargo test -r -F bench -p akd --no-run
 samply record --save-only -o prof.json -- ./target/release/deps/akd-6a3041934f2798a8 --show-output bench
 samply load prof.json
+
+CARGO_PROFILE_RELEASE_DEBUG=true cargo flamegraph --root --features tokio/rt-multi-thread --package akd --unit-test -- tests::test_pav::test_bench_prove

@@ -104,5 +104,5 @@ pub fn init_logger(level: Level) {
 #[cfg(test)]
 #[ctor::ctor]
 fn test_start() {
-    init_logger(Level::Info);
+    init_logger(Level::Warn);
 }
