@@ -12,7 +12,10 @@ use akd::{
     storage::{manager::StorageManager, memory::AsyncInMemoryDatabase},
     Azks, Directory,
 };
-use akd_core::WhatsAppV1Configuration as TC;
+
+use akd_core::configuration::ExampleLabel;
+use akd_core::ExperimentalConfiguration;
+type TC = ExperimentalConfiguration<ExampleLabel>;
 
 use crate::auditor::audit_verify;
 
