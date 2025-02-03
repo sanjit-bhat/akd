@@ -24,7 +24,7 @@ const DEFAULT_DIG: [u8; 32] = [2; 32];
 async fn bench_serv_get() {
     let (mut _rng, dir, labels) = seed_dir().await;
     let vrf_pk = dir.get_public_key().await.unwrap();
-    const NOPS: usize = 1_000;
+    const NOPS: usize = 3_000;
 
     let start = Instant::now();
     for i in 0..NOPS {
@@ -99,8 +99,8 @@ async fn bench_audit() {
     let total = start.elapsed();
 
     println!("nOps: {}", NOPS);
-    let m0 = (total.as_millis() as f64) / (NOPS as f64);
-    println!("ms/op: {}", m0);
+    let m0 = (total.as_micros() as f64) / (NOPS as f64);
+    println!("us/op: {}", m0);
     println!("ms: {}", total.as_millis());
 }
 
@@ -119,8 +119,8 @@ async fn bench_merk_prove() {
     let total = start.elapsed();
 
     println!("nOps: {}", NOPS);
-    let m0 = (total.as_nanos() as f64) / (NOPS as f64);
-    println!("ns/op: {}", m0);
+    let m0 = (total.as_micros() as f64) / (NOPS as f64);
+    println!("us/op: {}", m0);
     println!("ms: {}", total.as_millis());
 }
 
@@ -147,8 +147,8 @@ async fn bench_merk_put() {
     let total = start.elapsed();
 
     println!("nOps: {}", NOPS);
-    let m0 = (total.as_nanos() as f64) / (NOPS as f64);
-    println!("ns/op: {}", m0);
+    let m0 = (total.as_micros() as f64) / (NOPS as f64);
+    println!("us/op: {}", m0);
     println!("ms: {}", total.as_millis());
 }
 
