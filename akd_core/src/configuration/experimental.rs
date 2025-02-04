@@ -39,10 +39,14 @@ impl<L: DomainLabel> ExperimentalConfiguration<L> {
 impl<L: DomainLabel> Configuration for ExperimentalConfiguration<L> {
     fn hash(item: &[u8]) -> crate::hash::Digest {
         // Hash(domain label || item)
+        // change: rm domain label for better comparison.
+        /*
         let mut hasher = Sha256::new();
         hasher.update(L::domain_label());
         hasher.update(item);
         hasher.finalize().into()
+        */
+        Sha256::digest(item).into()
     }
 
     fn empty_root_value() -> AzksValue {
