@@ -1,0 +1,9 @@
+---- tests::test_pav::bench_rand_hash stdout ----
+nOps: 10000000
+ns/op: 125.2820667
+ms: 1252
+
+---- tests::test_pav::bench_rand stdout ----
+nOps: 100000000
+ns/op: 66.03021292
+ms: 6603

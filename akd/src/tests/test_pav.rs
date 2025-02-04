@@ -12,6 +12,7 @@ use akd::{
     storage::{manager::StorageManager, memory::AsyncInMemoryDatabase},
     Azks, Directory,
 };
+use sha2::{Digest, Sha256};
 
 use akd_core::configuration::ExampleLabel;
 use akd_core::ExperimentalConfiguration;
@@ -21,6 +22,43 @@ use crate::auditor::audit_verify;
 
 const NSEED: usize = 1_000_000;
 const DEFAULT_DIG: [u8; 32] = [2; 32];
+
+#[test]
+fn bench_rand() {
+    let mut data: [u8; 64] = [2; 64];
+    let mut rng = StdRng::seed_from_u64(42);
+
+    const NOPS: usize = 100_000_000;
+    let start = Instant::now();
+    for _ in 0..NOPS {
+        rng.fill(&mut data);
+    }
+    let total = start.elapsed();
+
+    println!("nOps: {}", NOPS);
+    let m0 = (total.as_nanos() as f64) / (NOPS as f64);
+    println!("ns/op: {}", m0);
+    println!("ms: {}", total.as_millis());
+}
+
+#[test]
+fn bench_rand_hash() {
+    let mut data: [u8; 64] = [2; 64];
+    let mut rng = StdRng::seed_from_u64(42);
+
+    const NOPS: usize = 10_000_000;
+    let start = Instant::now();
+    for _ in 0..NOPS {
+        rng.fill(&mut data);
+        Sha256::digest(data);
+    }
+    let total = start.elapsed();
+
+    println!("nOps: {}", NOPS);
+    let m0 = (total.as_nanos() as f64) / (NOPS as f64);
+    println!("ns/op: {}", m0);
+    println!("ms: {}", total.as_millis());
+}
 
 // get key and verify proof.
 #[tokio::test(flavor = "multi_thread")]
