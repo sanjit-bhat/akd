@@ -19,8 +19,8 @@ protobuf-parse = "3"
 # Disable all STD for the crate
 nostd = []
 # Supported configurations
-whatsapp_v1 = ["dep:blake3"]
-experimental = ["dep:blake3"]
+whatsapp_v1 = []
+experimental = []
 # Include the VRF verification logic
 vrf = ["ed25519-dalek", "curve25519-dalek"]
 serde_serialization = ["dep:serde", "dep:serde_bytes", "ed25519-dalek/serde"]
@@ -46,7 +46,7 @@ hex = "0.4"
 zeroize = "1"
 
 ## Optional dependencies ##
-blake3 = { version = "1", optional = true, default-features = false }
+sha2 = "0.11.0-pre.4"
 protobuf = { version = "3", optional = true }
 rand = { version = "0.8", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
