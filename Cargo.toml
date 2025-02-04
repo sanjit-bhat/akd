@@ -2,3 +2,7 @@
 
 members = ["akd", "akd_core", "examples", "xtask"]
 resolver = "2"
+
+[profile.benchtest]
+inherits = "release"
+debug = true
