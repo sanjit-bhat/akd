@@ -24,6 +24,7 @@ default = [
 ]
 
 bench = ["experimental", "public_tests", "tokio/rt-multi-thread"]
+benchtest = ["tokio/rt-multi-thread", "experimental", "parallel_vrf"]
 # Greedy loading of lookup proof nodes
 greedy_lookup_preload = []
 public_auditing = ["dep:protobuf", "akd_core/protobuf"]

@@ -1,4 +1,4 @@
-cargo test --profile benchtest -F bench -p akd --no-run
+cargo test --profile benchtest -F benchtest -p akd --no-run
 samply record ./target/release/deps/akd-6a3041934f2798a8 --show-output bench
 samply load profile.json.gz
 
