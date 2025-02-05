@@ -42,6 +42,7 @@ impl AsyncInMemoryDatabase {
     }
 
     #[cfg(test)]
+    #[allow(missing_docs)]
     pub fn clear(&self) {
         self.db.clear();
         self.user_info.clear();
