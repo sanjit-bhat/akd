@@ -24,7 +24,7 @@ const NSEED: usize = 1_000_000;
 const DEFAULT_DIG: [u8; 32] = [2; 32];
 
 #[test]
-fn bench_rand() {
+fn bench_hash_rand() {
     let mut data: [u8; 64] = [2; 64];
     let mut rng = StdRng::seed_from_u64(42);
 
@@ -42,7 +42,7 @@ fn bench_rand() {
 }
 
 #[test]
-fn bench_rand_hash() {
+fn bench_hash() {
     let mut data: [u8; 64] = [2; 64];
     let mut rng = StdRng::seed_from_u64(42);
 
@@ -60,7 +60,6 @@ fn bench_rand_hash() {
     println!("ms: {}", total.as_millis());
 }
 
-// get key and verify proof.
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_serv_get() {
     let (mut _rng, dir, labels) = seed_dir().await;
@@ -83,7 +82,6 @@ async fn bench_serv_get() {
     println!("ms: {}", total.as_millis());
 }
 
-// put key and verify proof, just for that version.
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_serv_put() {
     let (mut rng, dir, _labels) = seed_dir().await;
