@@ -97,8 +97,6 @@ async fn bench_serv_put() {
             .key_history(&l, HistoryParams::MostRecent(1))
             .await
             .unwrap();
-        // TODO: is it comparable to only check latest here?
-        // if auditor ensures mono, i think?
         key_history_verify::<TC>(
             vrf_pk.as_bytes(),
             dig.hash(),
