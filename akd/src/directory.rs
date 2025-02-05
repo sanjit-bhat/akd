@@ -284,7 +284,7 @@ where
             current_azks.get_root_hash::<TC, _>(&self.storage).await?,
         );
         let proof = self
-            .lookup_with_info(&current_azks, lookup_info, false)
+            .lookup_with_info(&current_azks, lookup_info, true)
             .await?;
         Ok((proof, root_hash))
     }
@@ -391,9 +391,11 @@ where
         }
 
         // Load nodes needed using the lookup infos.
+        /*
         current_azks
             .preload_lookup_nodes(&self.storage, &lookup_infos, None)
             .await?;
+        */
 
         // Ensure we have got all lookup infos needed.
         assert_eq!(akd_labels.len(), lookup_infos.len());
@@ -548,9 +550,11 @@ where
                 marker_labels.push(node_label);
             }
 
+            /*
             current_azks
                 .preload_lookup_nodes(&self.storage, &lookup_infos, Some(marker_labels))
                 .await?;
+            */
         }
 
         // The creation of update proofs should happen only after the preload operation (to prevent cache misses).

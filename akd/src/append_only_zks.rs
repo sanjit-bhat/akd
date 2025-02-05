@@ -36,6 +36,7 @@ use std::sync::Arc;
 /// The default azks key
 pub const DEFAULT_AZKS_KEY: u8 = 1u8;
 
+#[allow(unused)]
 async fn tic_toc<T>(f: impl core::future::Future<Output = T>) -> (T, Option<f64>) {
     #[cfg(feature = "runtime_metrics")]
     {
@@ -344,6 +345,7 @@ impl Azks {
         let azks_element_set = AzksElementSet::from(nodes);
 
         // preload the nodes that we will visit during the insertion
+        /*
         let (fallible_load_count, time_s) =
             tic_toc(self.preload_nodes(storage, &azks_element_set, parallelism_config)).await;
         let load_count = fallible_load_count?;
@@ -358,6 +360,7 @@ impl Azks {
                 load_count
             );
         }
+        */
 
         // increment the current epoch
         self.increment_epoch();
@@ -669,6 +672,7 @@ impl Azks {
         Ok(count)
     }
 
+    #[allow(unused)]
     pub(crate) async fn preload_lookup_nodes<S: Database + Send + Sync + 'static>(
         &self,
         storage: &StorageManager<S>,
@@ -697,6 +701,7 @@ impl Azks {
     }
 
     /// Preloads given nodes using breadth-first search.
+    #[allow(unused)]
     pub(crate) async fn preload_nodes<S: Database + 'static>(
         &self,
         storage: &StorageManager<S>,
@@ -917,6 +922,7 @@ impl Azks {
         // Suppose the epochs start_epoch and end_epoch exist in the set.
         // This function should return the proof that nothing was removed/changed from the tree
         // between these epochs.
+        /*
         let (fallible_load_count, time_s) = tic_toc(self.preload_audit_nodes::<_>(
             storage,
             latest_epoch,
@@ -938,6 +944,7 @@ impl Azks {
             );
         }
         storage.log_metrics().await;
+        */
 
         let node =
             TreeNode::get_from_storage(storage, &NodeKey(NodeLabel::root()), latest_epoch).await?;
@@ -964,6 +971,7 @@ impl Azks {
         Ok(AppendOnlyProof { proofs, epochs })
     }
 
+    #[allow(unused)]
     async fn preload_audit_nodes<S: Database + 'static>(
         &self,
         storage: &StorageManager<S>,
