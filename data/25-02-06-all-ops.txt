@@ -1,0 +1,39 @@
+---- tests::test_pav::bench_audit stdout ----
+nOps: 100
+us/op: 39601.98
+ms: 3960
+
+---- tests::test_pav::bench_audit_subtract stdout ----
+nOps: 100
+us/op: 21432.23
+ms: 2143
+
+---- tests::test_pav::bench_hash stdout ----
+nOps: 10000000
+ns/op: 122.9827708
+ms: 1229
+
+---- tests::test_pav::bench_hash_rand stdout ----
+nOps: 100000000
+ns/op: 67.23543416
+ms: 6723
+
+---- tests::test_pav::bench_merk_prove stdout ----
+nOps: 100000
+us/op: 26.99016
+ms: 2699
+
+---- tests::test_pav::bench_merk_put stdout ----
+nOps: 100000
+us/op: 85.0388
+ms: 8503
+
+---- tests::test_pav::bench_serv_get stdout ----
+nOps: 3000
+us/op: 1118.317
+ms: 3354
+
+---- tests::test_pav::bench_serv_put stdout ----
+nOps: 2000
+us/op: 2419.9925
+ms: 4839
