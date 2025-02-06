@@ -175,7 +175,9 @@ impl<Db: Database> StorageManager<Db> {
 
     /// Start an in-memory transaction of changes.
     pub fn begin_transaction(&self) -> bool {
-        let started = self.transaction.begin_transaction();
+        // change: don't begin txn. prevents txn code from running.
+        // let started = self.transaction.begin_transaction();
+        let started = true;
 
         // disable the cache cleaning since we're in a write transaction
         // and will want to keep cached objects for the life of the transaction
@@ -188,6 +190,7 @@ impl<Db: Database> StorageManager<Db> {
 
     /// Commit a transaction in the database.
     pub async fn commit_transaction(&self) -> Result<u64, StorageError> {
+        /*
         // this retrieves all the trans operations, and "de-activates" the transaction flag
         let records = self.transaction.commit_transaction()?;
         let num_records = records.len();
@@ -223,11 +226,13 @@ impl<Db: Database> StorageManager<Db> {
         .await?;
         self.increment_metric(METRIC_BATCH_SET);
         Ok(num_records as u64)
+        */
+        Ok(0)
     }
 
     /// Rollback a transaction.
     pub fn rollback_transaction(&self) -> Result<(), StorageError> {
-        self.transaction.rollback_transaction()?;
+        // self.transaction.rollback_transaction()?;
         // The transaction is being reverted and therefore we can re-enable
         // the cache cleaning status
         if let Some(cache) = &self.cache {
