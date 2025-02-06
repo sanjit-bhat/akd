@@ -8,7 +8,8 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 
 use akd::storage::memory::AsyncInMemoryDatabase as DB;
 use akd::{
-    append_only_zks::{AzksParallelismConfig, InsertMode},
+    append_only_zks::{AzksParallelismConfig, AzksParallelismOption, InsertMode},
+    auditor::audit_verify,
     storage::{manager::StorageManager, memory::AsyncInMemoryDatabase},
     Azks, Directory,
 };
@@ -18,10 +19,12 @@ use akd_core::configuration::ExampleLabel;
 use akd_core::ExperimentalConfiguration;
 type TC = ExperimentalConfiguration<ExampleLabel>;
 
-use crate::auditor::audit_verify;
-
 const NSEED: usize = 1_000_000;
 const DEFAULT_DIG: [u8; 32] = [2; 32];
+const PAR_CFG: AzksParallelismConfig = AzksParallelismConfig {
+    insertion: AzksParallelismOption::Static(8),
+    preload: AzksParallelismOption::Disabled,
+};
 
 #[test]
 fn bench_hash_rand() {
@@ -86,7 +89,7 @@ async fn bench_serv_get() {
 async fn bench_serv_put() {
     let (mut rng, dir, _labels) = seed_dir().await;
     let vrf_pk = dir.get_public_key().await.unwrap();
-    const NOPS: usize = 1_000;
+    const NOPS: usize = 2_000;
 
     let start = Instant::now();
     for _ in 0..NOPS {
@@ -118,18 +121,18 @@ async fn bench_serv_put() {
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_audit() {
     let (mut rng, dir, _) = seed_dir().await;
-    let start_eph = dir.get_epoch_hash().await.unwrap();
+    let start_ep = dir.get_epoch_hash().await.unwrap();
     const NINSERT: usize = 1_000;
     let new_els: Vec<(AkdLabel, AkdValue)> = (0..NINSERT)
         .map(|_| (AkdLabel::random(&mut rng), AkdValue(vec![2])))
         .collect();
-    let end_eph = dir.publish(new_els).await.unwrap();
+    let end_ep = dir.publish(new_els).await.unwrap();
 
     const NOPS: usize = 100;
     let start = Instant::now();
     for _ in 0..NOPS {
-        let p = dir.audit(start_eph.epoch(), end_eph.epoch()).await.unwrap();
-        audit_verify::<TC>(vec![start_eph.hash(), end_eph.hash()], p)
+        let p = dir.audit(start_ep.epoch(), end_ep.epoch()).await.unwrap();
+        audit_verify::<TC>(vec![start_ep.hash(), end_ep.hash()], p)
             .await
             .unwrap();
     }
@@ -172,6 +175,7 @@ async fn bench_merk_put() {
             label: rand_label(&mut rng),
             value: AzksValue(DEFAULT_DIG),
         }];
+        // no parallelism for single put.
         tr.batch_insert_nodes::<TC, _>(
             &store,
             elems,
@@ -201,14 +205,9 @@ async fn seed_tr() -> (StdRng, StorageManager<AsyncInMemoryDatabase>, Azks) {
             value: AzksValue(DEFAULT_DIG),
         })
         .collect();
-    tr.batch_insert_nodes::<TC, _>(
-        &store,
-        seed,
-        InsertMode::Directory,
-        AzksParallelismConfig::disabled(),
-    )
-    .await
-    .unwrap();
+    tr.batch_insert_nodes::<TC, _>(&store, seed, InsertMode::Directory, PAR_CFG)
+        .await
+        .unwrap();
     (rng, store, tr)
 }
 
@@ -217,7 +216,7 @@ async fn seed_dir() -> (StdRng, Directory<TC, DB, VRF>, Vec<AkdLabel>) {
     let db = AsyncInMemoryDatabase::new();
     let store = StorageManager::new_no_cache(db);
     let vrf = VRF {};
-    let dir = Directory::<TC, _, _>::new(store.clone(), vrf, AzksParallelismConfig::disabled())
+    let dir = Directory::<TC, _, _>::new(store, vrf, PAR_CFG)
         .await
         .unwrap();
 
