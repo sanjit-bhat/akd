@@ -1109,10 +1109,12 @@ impl Azks {
                 // this is the case where the root is unchanged since the last epoch
                 return Ok((unchanged, leaves));
             }
+            /*
             unchanged.push(AzksElement {
                 label: node.label,
                 value: node_to_azks_value::<TC>(&Some(node), NodeHashingMode::WithLeafEpoch),
             });
+            */
 
             return Ok((unchanged, leaves));
         }

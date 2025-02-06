@@ -7,6 +7,8 @@
 
 //! Code for an auditor of a authenticated key directory
 
+use std::marker::PhantomData;
+
 use akd_core::configuration::Configuration;
 
 use crate::append_only_zks::AzksParallelismConfig;
@@ -98,4 +100,102 @@ pub async fn verify_consecutive_append_only<TC: Configuration>(
         return Err(AkdError::AzksErr(AzksError::VerifyAppendOnlyProof));
     }
     Ok(())
+}
+
+#[allow(missing_docs)]
+pub struct Auditor<TC: Configuration> {
+    store: StorageManager<AsyncInMemoryDatabase>,
+    azks: Azks,
+    par_cfg: AzksParallelismConfig,
+    tc: PhantomData<TC>,
+}
+
+impl<TC> Auditor<TC>
+where
+    TC: Configuration,
+{
+    #[allow(missing_docs)]
+    pub async fn new(par_cfg: AzksParallelismConfig) -> Self {
+        let db = AsyncInMemoryDatabase::new();
+        let store = StorageManager::new_no_cache(db);
+        let azks = Azks::new::<TC, _>(&store).await.unwrap();
+        Auditor::<TC> {
+            store,
+            azks,
+            par_cfg,
+            tc: PhantomData,
+        }
+    }
+
+    #[allow(missing_docs)]
+    pub async fn audit(
+        &mut self,
+        hashes: Vec<Digest>,
+        proof: AppendOnlyProof,
+    ) -> Result<(), AkdError> {
+        if proof.epochs.len() + 1 != hashes.len() {
+            return Err(AkdError::AuditErr(AuditorError::VerifyAuditProof(format!(
+                "The proof has a different number of epochs than needed for hashes. 
+            The number of hashes you provide should be one more than the number of epochs! 
+            Number of epochs = {}, number of hashes = {}",
+                proof.epochs.len(),
+                hashes.len()
+            ))));
+        }
+        if proof.epochs.len() != proof.proofs.len() {
+            return Err(AkdError::AuditErr(AuditorError::VerifyAuditProof(format!(
+                "The proof has {} epochs and {} proofs. These should be equal!",
+                proof.epochs.len(),
+                proof.proofs.len()
+            ))));
+        }
+        for i in 0..hashes.len() - 1 {
+            let start_hash = hashes[i];
+            let end_hash = hashes[i + 1];
+            self.verify_consecutive_append_only(
+                &proof.proofs[i],
+                start_hash,
+                end_hash,
+                proof.epochs[i] + 1,
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
+    async fn verify_consecutive_append_only(
+        &mut self,
+        proof: &SingleAppendOnlyProof,
+        start_hash: Digest,
+        end_hash: Digest,
+        end_epoch: u64,
+    ) -> Result<(), AkdError> {
+        let computed_start_root_hash: Digest =
+            self.azks.get_root_hash::<TC, _>(&self.store).await?;
+        let mut verified = computed_start_root_hash == start_hash;
+        self.azks.latest_epoch = end_epoch - 1;
+        let updated_inserted = proof
+            .inserted
+            .iter()
+            .map(|x| {
+                let mut y = *x;
+                y.value = AzksValue(TC::hash_leaf_with_commitment(x.value, end_epoch).0);
+                y
+            })
+            .collect();
+        self.azks
+            .batch_insert_nodes::<TC, _>(
+                &self.store,
+                updated_inserted,
+                InsertMode::Auditor,
+                self.par_cfg,
+            )
+            .await?;
+        let computed_end_root_hash: Digest = self.azks.get_root_hash::<TC, _>(&self.store).await?;
+        verified = verified && (computed_end_root_hash == end_hash);
+        if !verified {
+            return Err(AkdError::AzksErr(AzksError::VerifyAppendOnlyProof));
+        }
+        Ok(())
+    }
 }

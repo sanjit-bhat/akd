@@ -9,14 +9,15 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 use akd::storage::memory::AsyncInMemoryDatabase as DB;
 use akd::{
     append_only_zks::{AzksParallelismConfig, AzksParallelismOption, InsertMode},
-    auditor::audit_verify,
+    auditor::Auditor,
     storage::{manager::StorageManager, memory::AsyncInMemoryDatabase},
-    Azks, Directory,
+    Azks, Directory, EpochHash,
 };
 use sha2::{Digest, Sha256};
 
 use akd_core::configuration::ExampleLabel;
 use akd_core::ExperimentalConfiguration;
+
 type TC = ExperimentalConfiguration<ExampleLabel>;
 
 const NSEED: usize = 1_000_000;
@@ -65,7 +66,7 @@ fn bench_hash() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_serv_get() {
-    let (mut _rng, dir, labels) = seed_dir().await;
+    let (mut _rng, dir, labels, _) = seed_dir().await;
     let vrf_pk = dir.get_public_key().await.unwrap();
     const NOPS: usize = 3_000;
 
@@ -87,7 +88,7 @@ async fn bench_serv_get() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_serv_put() {
-    let (mut rng, dir, _labels) = seed_dir().await;
+    let (mut rng, dir, _labels, _) = seed_dir().await;
     let vrf_pk = dir.get_public_key().await.unwrap();
     const NOPS: usize = 2_000;
 
@@ -120,21 +121,55 @@ async fn bench_serv_put() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_audit() {
-    let (mut rng, dir, _) = seed_dir().await;
-    let start_ep = dir.get_epoch_hash().await.unwrap();
-    const NINSERT: usize = 1_000;
-    let new_els: Vec<(AkdLabel, AkdValue)> = (0..NINSERT)
-        .map(|_| (AkdLabel::random(&mut rng), AkdValue(vec![2])))
-        .collect();
-    let end_ep = dir.publish(new_els).await.unwrap();
-
-    const NOPS: usize = 100;
-    let start = Instant::now();
-    for _ in 0..NOPS {
-        let p = dir.audit(start_ep.epoch(), end_ep.epoch()).await.unwrap();
-        audit_verify::<TC>(vec![start_ep.hash(), end_ep.hash()], p)
+    let (mut rng, dir, _, fst_hash) = seed_dir().await;
+    let mut aud = Auditor::<TC>::new(PAR_CFG).await;
+    {
+        let snd_hash = dir.get_epoch_hash().await.unwrap();
+        let p = dir.audit(fst_hash.epoch(), snd_hash.epoch()).await.unwrap();
+        aud.audit(vec![fst_hash.hash(), snd_hash.hash()], p)
             .await
             .unwrap();
+    }
+    const NOPS: usize = 100;
+    const NINSERT: usize = 1_000;
+
+    let start = Instant::now();
+    for _ in 0..NOPS {
+        let start_hash = dir.get_epoch_hash().await.unwrap();
+        let new_els: Vec<(AkdLabel, AkdValue)> = (0..NINSERT)
+            .map(|_| (AkdLabel::random(&mut rng), AkdValue(vec![2])))
+            .collect();
+        let end_hash = dir.publish(new_els).await.unwrap();
+
+        let p = dir
+            .audit(start_hash.epoch(), end_hash.epoch())
+            .await
+            .unwrap();
+        aud.audit(vec![start_hash.hash(), end_hash.hash()], p)
+            .await
+            .unwrap();
+    }
+    let total = start.elapsed();
+
+    println!("nOps: {}", NOPS);
+    let m0 = (total.as_micros() as f64) / (NOPS as f64);
+    println!("us/op: {}", m0);
+    println!("ms: {}", total.as_millis());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn bench_audit_subtract() {
+    let (mut rng, dir, _, _) = seed_dir().await;
+    const NOPS: usize = 100;
+    const NINSERT: usize = 1_000;
+
+    let start = Instant::now();
+    for _ in 0..NOPS {
+        let _start_hash = dir.get_epoch_hash().await.unwrap();
+        let new_els: Vec<(AkdLabel, AkdValue)> = (0..NINSERT)
+            .map(|_| (AkdLabel::random(&mut rng), AkdValue(vec![2])))
+            .collect();
+        let _end_hash = dir.publish(new_els).await.unwrap();
     }
     let total = start.elapsed();
 
@@ -211,7 +246,7 @@ async fn seed_tr() -> (StdRng, StorageManager<AsyncInMemoryDatabase>, Azks) {
     (rng, store, tr)
 }
 
-async fn seed_dir() -> (StdRng, Directory<TC, DB, VRF>, Vec<AkdLabel>) {
+async fn seed_dir() -> (StdRng, Directory<TC, DB, VRF>, Vec<AkdLabel>, EpochHash) {
     let mut rng = StdRng::seed_from_u64(42);
     let db = AsyncInMemoryDatabase::new();
     let store = StorageManager::new_no_cache(db);
@@ -219,6 +254,7 @@ async fn seed_dir() -> (StdRng, Directory<TC, DB, VRF>, Vec<AkdLabel>) {
     let dir = Directory::<TC, _, _>::new(store, vrf, PAR_CFG)
         .await
         .unwrap();
+    let h = dir.get_epoch_hash().await.unwrap();
 
     let labels: Vec<AkdLabel> = (0..NSEED).map(|_| AkdLabel::random(&mut rng)).collect();
     let seed: Vec<(AkdLabel, AkdValue)> = labels
@@ -227,7 +263,7 @@ async fn seed_dir() -> (StdRng, Directory<TC, DB, VRF>, Vec<AkdLabel>) {
         .map(|l| (l, AkdValue(vec![2])))
         .collect();
     dir.publish(seed).await.unwrap();
-    (rng, dir, labels)
+    (rng, dir, labels, h)
 }
 
 fn rand_label(rng: &mut StdRng) -> NodeLabel {
