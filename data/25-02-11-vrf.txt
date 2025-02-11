@@ -12,3 +12,13 @@ total ms: 4673
 nOps: 30000
 us/op: 243.53786666666667
 total ms: 7306
+
+---- tests::test_pav::bench_vrf_slow_eval stdout ----
+nOps: 50000
+us/op: 56.24036
+total ms: 2812
+
+---- tests::test_pav::bench_vrf_slow_prove stdout ----
+nOps: 50000
+us/op: 105.99702
+total ms: 5299

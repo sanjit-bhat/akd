@@ -125,6 +125,46 @@ async fn bench_vrf_prove() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn bench_vrf_slow_eval() {
+    let vrf_sk = init_vrf_slow().await;
+    let mut data: [u8; 32] = [0; 32];
+    let mut rng = StdRng::seed_from_u64(42);
+    const NOPS: usize = 50_000;
+
+    let start = Instant::now();
+    for _ in 0..NOPS {
+        rng.fill(&mut data);
+        vrf_sk.evaluate(&data);
+    }
+    let total = start.elapsed();
+
+    println!("nOps: {}", NOPS);
+    let m0 = (total.as_micros() as f64) / (NOPS as f64);
+    println!("us/op: {}", m0);
+    println!("total ms: {}", total.as_millis());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn bench_vrf_slow_prove() {
+    let vrf_sk = init_vrf_slow().await;
+    let mut data: [u8; 32] = [0; 32];
+    let mut rng = StdRng::seed_from_u64(42);
+    const NOPS: usize = 50_000;
+
+    let start = Instant::now();
+    for _ in 0..NOPS {
+        rng.fill(&mut data);
+        vrf_sk.prove(&data);
+    }
+    let total = start.elapsed();
+
+    println!("nOps: {}", NOPS);
+    let m0 = (total.as_micros() as f64) / (NOPS as f64);
+    println!("us/op: {}", m0);
+    println!("total ms: {}", total.as_millis());
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn bench_vrf_verify() {
     let (vrf_sk, vrf_pk) = init_vrf().await;
     let mut data: [u8; 32] = [0; 32];
@@ -152,6 +192,13 @@ async fn init_vrf() -> (VRFExpandedPrivateKey, VRFPublicKey) {
     let vrf_sk = VRFExpandedPrivateKey::from(&v2);
     let vrf_pk = VRFPublicKey::from(&v2);
     (vrf_sk, vrf_pk)
+}
+
+async fn init_vrf_slow() -> VRFPrivateKey {
+    let v0 = VRF {};
+    let v1 = v0.retrieve().await.unwrap();
+    let vrf_sk = VRFPrivateKey::try_from(v1.as_slice()).unwrap();
+    vrf_sk
 }
 
 #[tokio::test(flavor = "multi_thread")]
