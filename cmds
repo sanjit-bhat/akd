@@ -1,5 +1,5 @@
 cargo test --profile benchtest -F benchtest -p akd --no-run
-samply record ./target/release/deps/akd-6a3041934f2798a8 --test-threads 1 --show-output bench
+samply record ./target/benchtest/deps/akd-6a3041934f2798a8 --test-threads 1 --show-output bench
 samply load profile.json.gz
 
-CARGO_PROFILE_RELEASE_DEBUG=true cargo flamegraph --root --features tokio/rt-multi-thread --package akd --unit-test -- tests::test_pav::test_bench_prove
+cargo flamegraph --root --profile benchtest --features benchtest --package akd --unit-test -- tests::test_pav::test_bench_prove
