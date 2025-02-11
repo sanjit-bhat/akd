@@ -30,8 +30,26 @@ const PAR_CFG: AzksParallelismConfig = AzksParallelismConfig {
 };
 
 #[test]
-fn bench_hash_rand() {
-    let mut data: [u8; 64] = [2; 64];
+fn bench_rand32() {
+    let mut data: [u8; 32] = [0; 32];
+    let mut rng = StdRng::seed_from_u64(42);
+
+    const NOPS: usize = 100_000_000;
+    let start = Instant::now();
+    for _ in 0..NOPS {
+        rng.fill(&mut data);
+    }
+    let total = start.elapsed();
+
+    println!("nOps: {}", NOPS);
+    let m0 = (total.as_nanos() as f64) / (NOPS as f64);
+    println!("ns/op: {}", m0);
+    println!("total ms: {}", total.as_millis());
+}
+
+#[test]
+fn bench_rand64() {
+    let mut data: [u8; 64] = [0; 64];
     let mut rng = StdRng::seed_from_u64(42);
 
     const NOPS: usize = 100_000_000;
