@@ -1,0 +1,14 @@
+---- tests::test_pav::bench_vrf_eval stdout ----
+nOps: 50000
+us/op: 43.1774
+total ms: 2158
+
+---- tests::test_pav::bench_vrf_prove stdout ----
+nOps: 50000
+us/op: 93.47216
+total ms: 4673
+
+---- tests::test_pav::bench_vrf_verify stdout ----
+nOps: 30000
+us/op: 243.53786666666667
+total ms: 7306
