@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use akd_core::ecvrf::{
-    HardCodedAkdVRF as VRF, VRFExpandedPrivateKey, VRFKeyStorage, VRFPrivateKey, VRFPublicKey,
+    HardCodedAkdVRF as VRF, Proof, VRFExpandedPrivateKey, VRFKeyStorage, VRFPrivateKey, VRFPublicKey
 };
 use akd_core::verify::history::HistoryParams;
 use akd_core::verify::{key_history_verify, lookup_verify, HistoryVerificationParams};
@@ -114,47 +114,9 @@ async fn bench_vrf_prove() {
     let start = Instant::now();
     for _ in 0..NOPS {
         rng.fill(&mut data);
-        vrf_sk.prove(&vrf_pk, &data);
-    }
-    let total = start.elapsed();
-
-    println!("nOps: {}", NOPS);
-    let m0 = (total.as_micros() as f64) / (NOPS as f64);
-    println!("us/op: {}", m0);
-    println!("total ms: {}", total.as_millis());
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn bench_vrf_slow_eval() {
-    let vrf_sk = init_vrf_slow().await;
-    let mut data: [u8; 32] = [0; 32];
-    let mut rng = StdRng::seed_from_u64(42);
-    const NOPS: usize = 50_000;
-
-    let start = Instant::now();
-    for _ in 0..NOPS {
-        rng.fill(&mut data);
-        vrf_sk.evaluate(&data);
-    }
-    let total = start.elapsed();
-
-    println!("nOps: {}", NOPS);
-    let m0 = (total.as_micros() as f64) / (NOPS as f64);
-    println!("us/op: {}", m0);
-    println!("total ms: {}", total.as_millis());
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn bench_vrf_slow_prove() {
-    let vrf_sk = init_vrf_slow().await;
-    let mut data: [u8; 32] = [0; 32];
-    let mut rng = StdRng::seed_from_u64(42);
-    const NOPS: usize = 50_000;
-
-    let start = Instant::now();
-    for _ in 0..NOPS {
-        rng.fill(&mut data);
-        vrf_sk.prove(&data);
+        let p = vrf_sk.prove(&vrf_pk, &data);
+        // byte enc for comparison with pav.
+        let _pb = p.to_bytes();
     }
     let total = start.elapsed();
 
@@ -174,8 +136,11 @@ async fn bench_vrf_verify() {
     let start = Instant::now();
     for _ in 0..NOPS {
         rng.fill(&mut data);
-        let p = vrf_sk.prove(&vrf_pk, &data);
-        vrf_pk.verify(&p, &data).unwrap();
+        let p0 = vrf_sk.prove(&vrf_pk, &data);
+        // byte enc for comparison with pav.
+        let pb = p0.to_bytes();
+        let p1 = Proof::try_from(&pb[..]).unwrap();
+        vrf_pk.verify(&p1, &data).unwrap();
     }
     let total = start.elapsed();
 
@@ -192,13 +157,6 @@ async fn init_vrf() -> (VRFExpandedPrivateKey, VRFPublicKey) {
     let vrf_sk = VRFExpandedPrivateKey::from(&v2);
     let vrf_pk = VRFPublicKey::from(&v2);
     (vrf_sk, vrf_pk)
-}
-
-async fn init_vrf_slow() -> VRFPrivateKey {
-    let v0 = VRF {};
-    let v1 = v0.retrieve().await.unwrap();
-    let vrf_sk = VRFPrivateKey::try_from(v1.as_slice()).unwrap();
-    vrf_sk
 }
 
 #[tokio::test(flavor = "multi_thread")]
