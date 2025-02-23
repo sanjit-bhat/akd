@@ -225,6 +225,7 @@ async fn bench_serv_put() {
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_audit() {
     let (mut rng, dir, _, fst_hash) = seed_dir(NSEED).await;
+    // TODO: change par to use default, which gets all available cores.
     let mut aud = Auditor::<TC>::new(PAR_CFG).await;
     {
         let snd_hash = dir.get_epoch_hash().await.unwrap();
@@ -239,6 +240,7 @@ async fn bench_audit() {
     let start = Instant::now();
     for _ in 0..NOPS {
         let start_hash = dir.get_epoch_hash().await.unwrap();
+        // TODO: change val to be 32 bytes. expected size.
         let new_els: Vec<(AkdLabel, AkdValue)> = (0..NINSERT)
             .map(|_| (AkdLabel::random(&mut rng), AkdValue(vec![2])))
             .collect();
