@@ -5,6 +5,7 @@ use akd_core::verify::history::HistoryParams;
 use akd_core::verify::{key_history_verify, lookup_verify, HistoryVerificationParams};
 use akd_core::{AkdLabel, AkdValue};
 use rand::{rngs::StdRng, SeedableRng};
+use rand::{CryptoRng, Rng};
 
 use akd::storage::memory::AsyncInMemoryDatabase as DB;
 use akd::{
@@ -19,51 +20,21 @@ use akd_core::ExperimentalConfiguration;
 
 type TC = ExperimentalConfiguration<ExampleLabel>;
 
-const NSEED: usize = 1_000_000;
+const DEFNSEED: usize = 100_000;
 const PAR_CFG: AzksParallelismConfig = AzksParallelismConfig {
     insertion: AzksParallelismOption::AvailableOr(0),
     preload: AzksParallelismOption::Disabled,
 };
 
 #[tokio::test(flavor = "multi_thread")]
-async fn bench_serv_get() {
-    let (mut _rng, dir, labels, _) = seed_dir(NSEED).await;
-    let vrf_pk = dir.get_public_key().await.unwrap();
-    const NOPS: usize = 3_000;
-
-    let start = Instant::now();
-    for i in 0..NOPS {
-        let l = &labels[i % NSEED];
-        let (p, dig) = dir.lookup(l.clone()).await.unwrap();
-        // note: each key only has one version.
-        // note: run sequentially.
-        lookup_verify::<TC>(vrf_pk.as_bytes(), dig.hash(), dig.epoch(), l.clone(), p).unwrap();
-    }
-    let total = start.elapsed();
-
-    println!("nOps: {}", NOPS);
-    let m0 = (total.as_micros() as f64) / (NOPS as f64);
-    println!("us/op: {}", m0);
-    println!("total ms: {}", total.as_millis());
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn bench_seed() {
-    let s = Instant::now();
-    seed_dir(2_000_000).await;
-    let t = s.elapsed();
-    println!("{}", t.as_secs());
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn bench_serv_put() {
-    let (mut rng, dir, _labels, _) = seed_dir(NSEED).await;
+async fn bench_serv_put_one() {
+    let (mut rng, dir, _labels, _) = seed_dir(DEFNSEED).await;
     let vrf_pk = dir.get_public_key().await.unwrap();
     const NOPS: usize = 2_000;
 
     let start = Instant::now();
     for _ in 0..NOPS {
-        let l = AkdLabel::random(&mut rng);
+        let l = mk_rand_label(&mut rng);
         let elem = vec![(l.clone(), mk_def_val())];
         dir.publish(elem).await.unwrap();
         let (p, dig) = dir
@@ -89,8 +60,38 @@ async fn bench_serv_put() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn bench_serv_get() {
+    let (mut _rng, dir, labels, _) = seed_dir(DEFNSEED).await;
+    let vrf_pk = dir.get_public_key().await.unwrap();
+    const NOPS: usize = 3_000;
+
+    let start = Instant::now();
+    for i in 0..NOPS {
+        let l = &labels[i % DEFNSEED];
+        let (p, dig) = dir.lookup(l.clone()).await.unwrap();
+        // note: each key only has one version.
+        // note: run sequentially.
+        lookup_verify::<TC>(vrf_pk.as_bytes(), dig.hash(), dig.epoch(), l.clone(), p).unwrap();
+    }
+    let total = start.elapsed();
+
+    println!("nOps: {}", NOPS);
+    let m0 = (total.as_micros() as f64) / (NOPS as f64);
+    println!("us/op: {}", m0);
+    println!("total ms: {}", total.as_millis());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn bench_seed() {
+    let s = Instant::now();
+    seed_dir(2_000_000).await;
+    let t = s.elapsed();
+    println!("{}", t.as_secs());
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn bench_audit() {
-    let (mut rng, dir, _, fst_hash) = seed_dir(NSEED).await;
+    let (mut rng, dir, _, fst_hash) = seed_dir(DEFNSEED).await;
     let mut aud = Auditor::<TC>::new(PAR_CFG).await;
     {
         let snd_hash = dir.get_epoch_hash().await.unwrap();
@@ -106,7 +107,7 @@ async fn bench_audit() {
     for _ in 0..NOPS {
         let start_hash = dir.get_epoch_hash().await.unwrap();
         let new_els: Vec<(AkdLabel, AkdValue)> = (0..NINSERT)
-            .map(|_| (AkdLabel::random(&mut rng), mk_def_val()))
+            .map(|_| (mk_rand_label(&mut rng), mk_def_val()))
             .collect();
         let end_hash = dir.publish(new_els).await.unwrap();
 
@@ -128,7 +129,7 @@ async fn bench_audit() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_audit_subtract() {
-    let (mut rng, dir, _, _) = seed_dir(NSEED).await;
+    let (mut rng, dir, _, _) = seed_dir(DEFNSEED).await;
     const NOPS: usize = 100;
     const NINSERT: usize = 1_000;
 
@@ -136,7 +137,7 @@ async fn bench_audit_subtract() {
     for _ in 0..NOPS {
         let _start_hash = dir.get_epoch_hash().await.unwrap();
         let new_els: Vec<(AkdLabel, AkdValue)> = (0..NINSERT)
-            .map(|_| (AkdLabel::random(&mut rng), mk_def_val()))
+            .map(|_| (mk_rand_label(&mut rng), mk_def_val()))
             .collect();
         let _end_hash = dir.publish(new_els).await.unwrap();
     }
@@ -158,7 +159,7 @@ async fn seed_dir(nseed: usize) -> (StdRng, Directory<TC, DB, VRF>, Vec<AkdLabel
         .unwrap();
     let h = dir.get_epoch_hash().await.unwrap();
 
-    let labels: Vec<AkdLabel> = (0..nseed).map(|_| AkdLabel::random(&mut rng)).collect();
+    let labels: Vec<AkdLabel> = (0..nseed).map(|_| mk_rand_label(&mut rng)).collect();
     let seed: Vec<(AkdLabel, AkdValue)> = labels
         .clone()
         .into_iter()
@@ -168,7 +169,15 @@ async fn seed_dir(nseed: usize) -> (StdRng, Directory<TC, DB, VRF>, Vec<AkdLabel
     (rng, dir, labels, h)
 }
 
+fn mk_rand_label<R: CryptoRng + Rng>(rng: &mut R) -> AkdLabel {
+    // 8 bytes to match pav uint64 uid.
+    let mut bytes = vec![0u8; 8];
+    rng.fill_bytes(&mut bytes);
+    AkdLabel(bytes)
+}
+
 fn mk_def_val() -> AkdValue {
+    // 32 bytes for ed25519 pk.
     let mut v = vec![0; 32];
     for i in 0..32 {
         v[i] = 2
