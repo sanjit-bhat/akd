@@ -199,7 +199,7 @@ async fn bench_serv_put() {
     let start = Instant::now();
     for _ in 0..NOPS {
         let l = AkdLabel::random(&mut rng);
-        let elem = vec![(l.clone(), AkdValue(vec![2]))];
+        let elem = vec![(l.clone(), mk_def_val())];
         dir.publish(elem).await.unwrap();
         let (p, dig) = dir
             .key_history(&l, HistoryParams::MostRecent(1))
@@ -226,7 +226,6 @@ async fn bench_serv_put() {
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_audit() {
     let (mut rng, dir, _, fst_hash) = seed_dir(NSEED).await;
-    // TODO: change par to use default, which gets all available cores.
     let mut aud = Auditor::<TC>::new(PAR_CFG).await;
     {
         let snd_hash = dir.get_epoch_hash().await.unwrap();
@@ -241,9 +240,8 @@ async fn bench_audit() {
     let start = Instant::now();
     for _ in 0..NOPS {
         let start_hash = dir.get_epoch_hash().await.unwrap();
-        // TODO: change val to be 32 bytes. expected size.
         let new_els: Vec<(AkdLabel, AkdValue)> = (0..NINSERT)
-            .map(|_| (AkdLabel::random(&mut rng), AkdValue(vec![2])))
+            .map(|_| (AkdLabel::random(&mut rng), mk_def_val()))
             .collect();
         let end_hash = dir.publish(new_els).await.unwrap();
 
@@ -273,7 +271,7 @@ async fn bench_audit_subtract() {
     for _ in 0..NOPS {
         let _start_hash = dir.get_epoch_hash().await.unwrap();
         let new_els: Vec<(AkdLabel, AkdValue)> = (0..NINSERT)
-            .map(|_| (AkdLabel::random(&mut rng), AkdValue(vec![2])))
+            .map(|_| (AkdLabel::random(&mut rng), mk_def_val()))
             .collect();
         let _end_hash = dir.publish(new_els).await.unwrap();
     }
@@ -360,7 +358,7 @@ async fn seed_dir(nseed: usize) -> (StdRng, Directory<TC, DB, VRF>, Vec<AkdLabel
     let seed: Vec<(AkdLabel, AkdValue)> = labels
         .clone()
         .into_iter()
-        .map(|l| (l, AkdValue(vec![2])))
+        .map(|l| (l, mk_def_val()))
         .collect();
     dir.publish(seed).await.unwrap();
     (rng, dir, labels, h)
@@ -371,4 +369,12 @@ fn rand_label(rng: &mut StdRng) -> NodeLabel {
         label_val: rng.gen::<[u8; 32]>(),
         label_len: 256,
     }
+}
+
+fn mk_def_val() -> AkdValue {
+    let mut v = vec![0; 32];
+    for i in 0..32 {
+        v[i] = 2
+    }
+    return AkdValue(v)
 }
