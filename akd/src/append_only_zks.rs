@@ -250,9 +250,8 @@ impl AzksParallelismOption {
         let parallelism = match *self {
             AzksParallelismOption::Disabled => return None,
             AzksParallelismOption::Static(parallelism) => parallelism,
-            AzksParallelismOption::AvailableOr(fallback_parallelism) => {
-                std::thread::available_parallelism()
-                    .map_or(fallback_parallelism, |v| v.get() as u32)
+            AzksParallelismOption::AvailableOr(_) => {
+                std::thread::available_parallelism().unwrap().get() as u32
             }
         };
 

@@ -1,7 +1,8 @@
 use std::time::Instant;
 
 use akd_core::ecvrf::{
-    HardCodedAkdVRF as VRF, Proof, VRFExpandedPrivateKey, VRFKeyStorage, VRFPrivateKey, VRFPublicKey
+    HardCodedAkdVRF as VRF, Proof, VRFExpandedPrivateKey, VRFKeyStorage, VRFPrivateKey,
+    VRFPublicKey,
 };
 use akd_core::verify::history::HistoryParams;
 use akd_core::verify::{key_history_verify, lookup_verify, HistoryVerificationParams};
@@ -25,7 +26,7 @@ type TC = ExperimentalConfiguration<ExampleLabel>;
 const NSEED: usize = 1_000_000;
 const DEFAULT_DIG: [u8; 32] = [2; 32];
 const PAR_CFG: AzksParallelismConfig = AzksParallelismConfig {
-    insertion: AzksParallelismOption::Static(8),
+    insertion: AzksParallelismOption::AvailableOr(0),
     preload: AzksParallelismOption::Disabled,
 };
 
@@ -315,15 +316,9 @@ async fn bench_merk_put() {
             label: rand_label(&mut rng),
             value: AzksValue(DEFAULT_DIG),
         }];
-        // no parallelism for single put.
-        tr.batch_insert_nodes::<TC, _>(
-            &store,
-            elems,
-            InsertMode::Directory,
-            AzksParallelismConfig::disabled(),
-        )
-        .await
-        .unwrap();
+        tr.batch_insert_nodes::<TC, _>(&store, elems, InsertMode::Directory, PAR_CFG)
+            .await
+            .unwrap();
     }
     let total = start.elapsed();
 
