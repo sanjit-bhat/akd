@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use akd_core::ecvrf::HardCodedAkdVRF as VRF;
 use akd_core::verify::history::HistoryParams;
@@ -13,7 +13,6 @@ use akd::storage::memory::AsyncInMemoryDatabase as DB;
 use akd::{
     append_only_zks::{AzksParallelismConfig, AzksParallelismOption},
     auditor::Auditor,
-    directory::ReadOnlyDirectory,
     storage::{manager::StorageManager, memory::AsyncInMemoryDatabase},
     Directory, EpochHash,
 };
@@ -69,8 +68,7 @@ async fn bench_serv_put_one() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_serv_put_batch() {
-    let (mut rng, d, _labels, _) = seed_server(DEF_NSEED).await;
-    let dir = Arc::new(d);
+    let (mut rng, dir, _labels, _) = seed_server(DEF_NSEED).await;
     let n_ops = 100;
     let n_warm = get_warmup(n_ops);
     let n_insert = 1_000;
@@ -207,7 +205,14 @@ async fn bench_audit_subtract() {
     println!("total ms: {}", total.as_millis());
 }
 
-async fn seed_server(nseed: usize) -> (StdRng, Directory<TC, DB, VRF>, Vec<AkdLabel>, EpochHash) {
+async fn seed_server(
+    nseed: usize,
+) -> (
+    StdRng,
+    Arc<Directory<TC, DB, VRF>>,
+    Vec<AkdLabel>,
+    EpochHash,
+) {
     let mut rng = StdRng::seed_from_u64(42);
     let db = AsyncInMemoryDatabase::new();
     let store = StorageManager::new_no_cache(db);
@@ -224,7 +229,7 @@ async fn seed_server(nseed: usize) -> (StdRng, Directory<TC, DB, VRF>, Vec<AkdLa
         .map(|l| (l, mk_def_val()))
         .collect();
     dir.publish(seed).await.unwrap();
-    (rng, dir, labels, h)
+    (rng, Arc::new(dir), labels, h)
 }
 
 fn mk_rand_label<R: CryptoRng + Rng>(rng: &mut R) -> AkdLabel {
