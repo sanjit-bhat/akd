@@ -13,6 +13,10 @@ use crate::{storage::types::ValueState, NodeLabel};
 
 /// Root hash of the tree and its associated epoch
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "serde_serialization",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct EpochHash(pub u64, pub Digest);
 
 impl EpochHash {

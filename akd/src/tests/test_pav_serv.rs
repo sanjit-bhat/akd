@@ -126,6 +126,30 @@ async fn put_batch_helper(batch_size: i32) {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn bench_serv_put_size() {
+    let (mut rng, dir, _labels, _) = seed_server(DEF_NSEED).await;
+    let elems: Vec<(AkdLabel, AkdValue)> = (0..1)
+        .map(|_| (mk_rand_label(&mut rng), mk_def_val()))
+        .collect();
+    dir.publish(elems.clone()).await.unwrap();
+    let (p, dig) = dir
+        .key_history(&elems[0].0, HistoryParams::MostRecent(1))
+        .await
+        .unwrap();
+    let pb = bincode::serialize(&p).unwrap();
+    let digb = bincode::serialize(&dig).unwrap();
+    let sz = (pb.len() + digb.len()) as f64;
+    report(
+        "bench_serv_put_size".into(),
+        1,
+        &[&Metric {
+            n: sz,
+            unit: "B".into(),
+        }],
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn bench_serv_get() {
     let (mut _rng, dir, labels, _) = seed_server(DEF_NSEED).await;
     let vrf_pk = dir.get_public_key().await.unwrap();
