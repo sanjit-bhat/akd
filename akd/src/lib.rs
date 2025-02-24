@@ -510,7 +510,6 @@
 //!
 //!
 
-#![warn(missing_docs)]
 #![allow(clippy::multiple_crate_versions)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
@@ -530,6 +529,7 @@ pub mod errors;
 pub mod helper_structs;
 pub mod storage;
 pub mod tree_node;
+pub mod benchutil;
 
 /// Shim module to group logging-related macros more easily
 /// when switching between [log](https://docs.rs/log/latest/log/)

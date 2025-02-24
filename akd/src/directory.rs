@@ -33,8 +33,8 @@ use tracing::Instrument;
 
 /// The representation of a auditable key directory
 pub struct Directory<TC, S: Database, V> {
-    storage: StorageManager<S>,
-    vrf: V,
+    pub storage: StorageManager<S>,
+    pub vrf: V,
     parallelism_config: AzksParallelismConfig,
     /// The cache lock guarantees that the cache is not
     /// flushed mid-proof generation. We allow multiple proof generations

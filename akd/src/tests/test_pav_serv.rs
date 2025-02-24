@@ -1,16 +1,19 @@
-use std::time::Instant;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use akd_core::ecvrf::HardCodedAkdVRF as VRF;
 use akd_core::verify::history::HistoryParams;
-use akd_core::verify::{key_history_verify, lookup_verify, HistoryVerificationParams};
+use akd_core::verify::lookup_verify;
 use akd_core::{AkdLabel, AkdValue};
 use rand::{rngs::StdRng, SeedableRng};
 use rand::{CryptoRng, Rng};
 
+use akd::benchutil::{report, Metric};
 use akd::storage::memory::AsyncInMemoryDatabase as DB;
 use akd::{
     append_only_zks::{AzksParallelismConfig, AzksParallelismOption},
     auditor::Auditor,
+    directory::ReadOnlyDirectory,
     storage::{manager::StorageManager, memory::AsyncInMemoryDatabase},
     Directory, EpochHash,
 };
@@ -20,7 +23,7 @@ use akd_core::ExperimentalConfiguration;
 
 type TC = ExperimentalConfiguration<ExampleLabel>;
 
-const DEFNSEED: usize = 100_000;
+const DEF_NSEED: usize = 1_000_000;
 const PAR_CFG: AzksParallelismConfig = AzksParallelismConfig {
     insertion: AzksParallelismOption::AvailableOr(0),
     preload: AzksParallelismOption::Disabled,
@@ -28,46 +31,108 @@ const PAR_CFG: AzksParallelismConfig = AzksParallelismConfig {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_serv_put_one() {
-    let (mut rng, dir, _labels, _) = seed_dir(DEFNSEED).await;
-    let vrf_pk = dir.get_public_key().await.unwrap();
-    const NOPS: usize = 2_000;
+    let (mut rng, dir, _labels, _) = seed_server(DEF_NSEED).await;
+    let n_ops = 2_000;
+    let n_warm = get_warmup(n_ops);
 
-    let start = Instant::now();
-    for _ in 0..NOPS {
+    let mut start = Instant::now();
+    for i in 0..n_warm + n_ops {
+        if i == n_warm {
+            start = Instant::now();
+        }
         let l = mk_rand_label(&mut rng);
         let elem = vec![(l.clone(), mk_def_val())];
         dir.publish(elem).await.unwrap();
-        let (p, dig) = dir
-            .key_history(&l, HistoryParams::MostRecent(1))
+        dir.key_history(&l, HistoryParams::MostRecent(1))
             .await
             .unwrap();
-        key_history_verify::<TC>(
-            vrf_pk.as_bytes(),
-            dig.hash(),
-            dig.epoch(),
-            l,
-            p,
-            HistoryVerificationParams::default(),
-        )
-        .unwrap();
     }
     let total = start.elapsed();
 
-    println!("nOps: {}", NOPS);
-    let m0 = (total.as_micros() as f64) / (NOPS as f64);
-    println!("us/op: {}", m0);
-    println!("total ms: {}", total.as_millis());
+    let m0 = (total.as_micros() as f64) / (n_ops as f64);
+    let m1 = total.as_millis() as f64;
+    report(
+        "bench_serv_put_one".into(),
+        n_ops,
+        &[
+            &Metric {
+                n: m0,
+                unit: "us/op".into(),
+            },
+            &Metric {
+                n: m1,
+                unit: "total(ms)".into(),
+            },
+        ],
+    )
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn bench_serv_put_batch() {
+    let (mut rng, dir, _labels, _) = seed_server(DEF_NSEED).await;
+    let n_ops = 100;
+    let n_warm = get_warmup(n_ops);
+    let n_insert = 1_000;
+
+    let mut total: Duration = Default::default();
+    for i in 0..n_warm + n_ops {
+        if i == n_warm {
+            total = Default::default();
+        }
+
+        let s0 = Instant::now();
+        let batch: Vec<(AkdLabel, AkdValue)> = (0..n_insert)
+            .map(|_| (mk_rand_label(&mut rng), mk_def_val()))
+            .collect();
+        dir.publish(batch.clone()).await.unwrap();
+        total += s0.elapsed();
+
+        let ro = ReadOnlyDirectory::<TC, _, _>::new(dir.storage.clone(), dir.vrf.clone(), PAR_CFG)
+            .await
+            .unwrap();
+        let aro = Arc::new(ro);
+        let mut join_set = tokio::task::JoinSet::new();
+
+        let s1 = Instant::now();
+        for (label, _) in batch.into_iter() {
+            let ro_clone = aro.clone();
+            join_set.spawn(async move {
+                ro_clone
+                    .key_history(&label, HistoryParams::MostRecent(1))
+                    .await
+            });
+        }
+        while let Some(_) = join_set.join_next().await {}
+        total += s1.elapsed();
+    }
+
+    let m0 = (total.as_micros() as f64) / (n_ops as f64);
+    let m1 = total.as_millis() as f64;
+    report(
+        "bench_serv_put_one".into(),
+        n_ops,
+        &[
+            &Metric {
+                n: m0,
+                unit: "us/op".into(),
+            },
+            &Metric {
+                n: m1,
+                unit: "total(ms)".into(),
+            },
+        ],
+    )
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_serv_get() {
-    let (mut _rng, dir, labels, _) = seed_dir(DEFNSEED).await;
+    let (mut _rng, dir, labels, _) = seed_server(DEF_NSEED).await;
     let vrf_pk = dir.get_public_key().await.unwrap();
-    const NOPS: usize = 3_000;
+    let n_ops = 3_000;
 
     let start = Instant::now();
-    for i in 0..NOPS {
-        let l = &labels[i % DEFNSEED];
+    for i in 0..n_ops {
+        let l = &labels[i % DEF_NSEED];
         let (p, dig) = dir.lookup(l.clone()).await.unwrap();
         // note: each key only has one version.
         // note: run sequentially.
@@ -75,8 +140,8 @@ async fn bench_serv_get() {
     }
     let total = start.elapsed();
 
-    println!("nOps: {}", NOPS);
-    let m0 = (total.as_micros() as f64) / (NOPS as f64);
+    println!("nOps: {}", n_ops);
+    let m0 = (total.as_micros() as f64) / (n_ops as f64);
     println!("us/op: {}", m0);
     println!("total ms: {}", total.as_millis());
 }
@@ -84,14 +149,14 @@ async fn bench_serv_get() {
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_seed() {
     let s = Instant::now();
-    seed_dir(2_000_000).await;
+    seed_server(2_000_000).await;
     let t = s.elapsed();
     println!("{}", t.as_secs());
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_audit() {
-    let (mut rng, dir, _, fst_hash) = seed_dir(DEFNSEED).await;
+    let (mut rng, dir, _, fst_hash) = seed_server(DEF_NSEED).await;
     let mut aud = Auditor::<TC>::new(PAR_CFG).await;
     {
         let snd_hash = dir.get_epoch_hash().await.unwrap();
@@ -100,13 +165,13 @@ async fn bench_audit() {
             .await
             .unwrap();
     }
-    const NOPS: usize = 100;
-    const NINSERT: usize = 1_000;
+    let n_ops = 100;
+    let n_insert = 1_000;
 
     let start = Instant::now();
-    for _ in 0..NOPS {
+    for _ in 0..n_ops {
         let start_hash = dir.get_epoch_hash().await.unwrap();
-        let new_els: Vec<(AkdLabel, AkdValue)> = (0..NINSERT)
+        let new_els: Vec<(AkdLabel, AkdValue)> = (0..n_insert)
             .map(|_| (mk_rand_label(&mut rng), mk_def_val()))
             .collect();
         let end_hash = dir.publish(new_els).await.unwrap();
@@ -121,35 +186,35 @@ async fn bench_audit() {
     }
     let total = start.elapsed();
 
-    println!("nOps: {}", NOPS);
-    let m0 = (total.as_micros() as f64) / (NOPS as f64);
+    println!("nOps: {}", n_ops);
+    let m0 = (total.as_micros() as f64) / (n_ops as f64);
     println!("us/op: {}", m0);
     println!("total ms: {}", total.as_millis());
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_audit_subtract() {
-    let (mut rng, dir, _, _) = seed_dir(DEFNSEED).await;
-    const NOPS: usize = 100;
-    const NINSERT: usize = 1_000;
+    let (mut rng, dir, _, _) = seed_server(DEF_NSEED).await;
+    let n_ops = 100;
+    let n_insert = 1_000;
 
     let start = Instant::now();
-    for _ in 0..NOPS {
+    for _ in 0..n_ops {
         let _start_hash = dir.get_epoch_hash().await.unwrap();
-        let new_els: Vec<(AkdLabel, AkdValue)> = (0..NINSERT)
+        let new_els: Vec<(AkdLabel, AkdValue)> = (0..n_insert)
             .map(|_| (mk_rand_label(&mut rng), mk_def_val()))
             .collect();
         let _end_hash = dir.publish(new_els).await.unwrap();
     }
     let total = start.elapsed();
 
-    println!("nOps: {}", NOPS);
-    let m0 = (total.as_micros() as f64) / (NOPS as f64);
+    println!("nOps: {}", n_ops);
+    let m0 = (total.as_micros() as f64) / (n_ops as f64);
     println!("us/op: {}", m0);
     println!("total ms: {}", total.as_millis());
 }
 
-async fn seed_dir(nseed: usize) -> (StdRng, Directory<TC, DB, VRF>, Vec<AkdLabel>, EpochHash) {
+async fn seed_server(nseed: usize) -> (StdRng, Directory<TC, DB, VRF>, Vec<AkdLabel>, EpochHash) {
     let mut rng = StdRng::seed_from_u64(42);
     let db = AsyncInMemoryDatabase::new();
     let store = StorageManager::new_no_cache(db);
@@ -183,4 +248,8 @@ fn mk_def_val() -> AkdValue {
         v[i] = 2
     }
     return AkdValue(v);
+}
+
+fn get_warmup(n_ops: i32) -> i32 {
+    return (n_ops as f64 * 0.1) as i32;
 }
