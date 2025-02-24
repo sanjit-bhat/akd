@@ -64,52 +64,45 @@ async fn bench_serv_put_one() {
                 unit: "total(ms)".into(),
             },
         ],
-    )
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_serv_put_batch() {
-    let (mut rng, dir, _labels, _) = seed_server(DEF_NSEED).await;
+    let (mut rng, d, _labels, _) = seed_server(DEF_NSEED).await;
+    let dir = Arc::new(d);
     let n_ops = 100;
     let n_warm = get_warmup(n_ops);
     let n_insert = 1_000;
 
-    let mut total: Duration = Default::default();
+    let mut start = Instant::now();
     for i in 0..n_warm + n_ops {
         if i == n_warm {
-            total = Default::default();
+            start = Instant::now();
         }
 
-        let s0 = Instant::now();
         let batch: Vec<(AkdLabel, AkdValue)> = (0..n_insert)
             .map(|_| (mk_rand_label(&mut rng), mk_def_val()))
             .collect();
         dir.publish(batch.clone()).await.unwrap();
-        total += s0.elapsed();
 
-        let ro = ReadOnlyDirectory::<TC, _, _>::new(dir.storage.clone(), dir.vrf.clone(), PAR_CFG)
-            .await
-            .unwrap();
-        let aro = Arc::new(ro);
         let mut join_set = tokio::task::JoinSet::new();
-
-        let s1 = Instant::now();
         for (label, _) in batch.into_iter() {
-            let ro_clone = aro.clone();
+            let dir_clone = dir.clone();
             join_set.spawn(async move {
-                ro_clone
+                dir_clone
                     .key_history(&label, HistoryParams::MostRecent(1))
                     .await
             });
         }
         while let Some(_) = join_set.join_next().await {}
-        total += s1.elapsed();
     }
+    let total = start.elapsed();
 
     let m0 = (total.as_micros() as f64) / (n_ops as f64);
     let m1 = total.as_millis() as f64;
     report(
-        "bench_serv_put_one".into(),
+        "bench_serv_put_batch".into(),
         n_ops,
         &[
             &Metric {
@@ -121,7 +114,7 @@ async fn bench_serv_put_batch() {
                 unit: "total(ms)".into(),
             },
         ],
-    )
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
