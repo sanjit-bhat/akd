@@ -27,6 +27,8 @@ const PAR_CFG: AzksParallelismConfig = AzksParallelismConfig {
     insertion: AzksParallelismOption::AvailableOr(0),
     preload: AzksParallelismOption::Disabled,
 };
+const NS_PER_US: f64 = 1_000.0;
+const NS_PER_MS: f64 = 1_000_000.0;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_serv_put_one() {
@@ -48,8 +50,8 @@ async fn bench_serv_put_one() {
     }
     let total = start.elapsed();
 
-    let m0 = (total.as_micros() as f64) / (n_ops as f64);
-    let m1 = total.as_millis() as f64;
+    let m0 = total.as_nanos() as f64 / NS_PER_US / n_ops as f64;
+    let m1 = total.as_nanos() as f64 / NS_PER_MS;
     report(
         "bench_serv_put_one".into(),
         n_ops,
@@ -68,18 +70,23 @@ async fn bench_serv_put_one() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_serv_put_batch() {
+    for sz in [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000] {
+        put_batch_helper(sz).await;
+    }
+}
+
+async fn put_batch_helper(batch_size: i32) {
     let (mut rng, dir, _labels, _) = seed_server(DEF_NSEED).await;
-    let n_ops = 100;
-    let n_warm = get_warmup(n_ops);
-    let n_insert = 1_000;
+    let n_batches = 20;
+    let n_warm = get_warmup(n_batches);
 
     let mut start = Instant::now();
-    for i in 0..n_warm + n_ops {
+    for i in 0..n_warm + n_batches {
         if i == n_warm {
             start = Instant::now();
         }
 
-        let batch: Vec<(AkdLabel, AkdValue)> = (0..n_insert)
+        let batch: Vec<(AkdLabel, AkdValue)> = (0..batch_size)
             .map(|_| (mk_rand_label(&mut rng), mk_def_val()))
             .collect();
         dir.publish(batch.clone()).await.unwrap();
@@ -97,11 +104,11 @@ async fn bench_serv_put_batch() {
     }
     let total = start.elapsed();
 
-    let m0 = (total.as_micros() as f64) / (n_ops as f64);
-    let m1 = total.as_millis() as f64;
+    let m0 = total.as_nanos() as f64 / NS_PER_US / (n_batches * batch_size) as f64;
+    let m1 = total.as_nanos() as f64 / NS_PER_MS;
     report(
         "bench_serv_put_batch".into(),
-        n_ops,
+        batch_size,
         &[
             &Metric {
                 n: m0,
@@ -119,11 +126,11 @@ async fn bench_serv_put_batch() {
 async fn bench_serv_get() {
     let (mut _rng, dir, labels, _) = seed_server(DEF_NSEED).await;
     let vrf_pk = dir.get_public_key().await.unwrap();
-    let n_ops = 3_000;
+    let n_ops: i32 = 3_000;
 
     let start = Instant::now();
     for i in 0..n_ops {
-        let l = &labels[i % DEF_NSEED];
+        let l = &labels[i as usize % DEF_NSEED];
         let (p, dig) = dir.lookup(l.clone()).await.unwrap();
         // note: each key only has one version.
         // note: run sequentially.
@@ -131,18 +138,22 @@ async fn bench_serv_get() {
     }
     let total = start.elapsed();
 
-    println!("nOps: {}", n_ops);
-    let m0 = (total.as_micros() as f64) / (n_ops as f64);
-    println!("us/op: {}", m0);
-    println!("total ms: {}", total.as_millis());
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn bench_seed() {
-    let s = Instant::now();
-    seed_server(2_000_000).await;
-    let t = s.elapsed();
-    println!("{}", t.as_secs());
+    let m0 = total.as_nanos() as f64 / NS_PER_US / n_ops as f64;
+    let m1 = total.as_nanos() as f64 / NS_PER_MS;
+    report(
+        "bench_serv_get".into(),
+        n_ops,
+        &[
+            &Metric {
+                n: m0,
+                unit: "us/op".into(),
+            },
+            &Metric {
+                n: m1,
+                unit: "total(ms)".into(),
+            },
+        ],
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -165,6 +176,7 @@ async fn bench_audit() {
         let new_els: Vec<(AkdLabel, AkdValue)> = (0..n_insert)
             .map(|_| (mk_rand_label(&mut rng), mk_def_val()))
             .collect();
+        // TODO: time to not count this.
         let end_hash = dir.publish(new_els).await.unwrap();
 
         let p = dir
@@ -177,32 +189,22 @@ async fn bench_audit() {
     }
     let total = start.elapsed();
 
-    println!("nOps: {}", n_ops);
-    let m0 = (total.as_micros() as f64) / (n_ops as f64);
-    println!("us/op: {}", m0);
-    println!("total ms: {}", total.as_millis());
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn bench_audit_subtract() {
-    let (mut rng, dir, _, _) = seed_server(DEF_NSEED).await;
-    let n_ops = 100;
-    let n_insert = 1_000;
-
-    let start = Instant::now();
-    for _ in 0..n_ops {
-        let _start_hash = dir.get_epoch_hash().await.unwrap();
-        let new_els: Vec<(AkdLabel, AkdValue)> = (0..n_insert)
-            .map(|_| (mk_rand_label(&mut rng), mk_def_val()))
-            .collect();
-        let _end_hash = dir.publish(new_els).await.unwrap();
-    }
-    let total = start.elapsed();
-
-    println!("nOps: {}", n_ops);
-    let m0 = (total.as_micros() as f64) / (n_ops as f64);
-    println!("us/op: {}", m0);
-    println!("total ms: {}", total.as_millis());
+    let m0 = total.as_nanos() as f64 / NS_PER_US / n_ops as f64;
+    let m1 = total.as_nanos() as f64 / NS_PER_MS;
+    report(
+        "bench_serv_audit".into(),
+        n_ops,
+        &[
+            &Metric {
+                n: m0,
+                unit: "us/op".into(),
+            },
+            &Metric {
+                n: m1,
+                unit: "total(ms)".into(),
+            },
+        ],
+    );
 }
 
 async fn seed_server(

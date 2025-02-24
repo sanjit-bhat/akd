@@ -8,22 +8,39 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 
 use sha2::{Digest, Sha256};
 
+use akd::benchutil::{report, Metric};
+
+const NS_PER_US: f64 = 1_000.0;
+const NS_PER_MS: f64 = 1_000_000.0;
+
 #[test]
 fn bench_rand32() {
     let mut data: [u8; 32] = [0; 32];
     let mut rng = StdRng::seed_from_u64(42);
 
-    const NOPS: usize = 100_000_000;
+    let n_ops: i32 = 100_000_000;
     let start = Instant::now();
-    for _ in 0..NOPS {
+    for _ in 0..n_ops {
         rng.fill(&mut data);
     }
     let total = start.elapsed();
 
-    println!("nOps: {}", NOPS);
-    let m0 = (total.as_nanos() as f64) / (NOPS as f64);
-    println!("ns/op: {}", m0);
-    println!("total ms: {}", total.as_millis());
+    let m0 = total.as_nanos() as f64 / n_ops as f64;
+    let m1 = total.as_nanos() as f64 / NS_PER_MS;
+    report(
+        "bench_rand32".into(),
+        n_ops,
+        &[
+            &Metric {
+                n: m0,
+                unit: "ns/op".into(),
+            },
+            &Metric {
+                n: m1,
+                unit: "total(ms)".into(),
+            },
+        ],
+    );
 }
 
 #[test]
@@ -31,17 +48,29 @@ fn bench_rand64() {
     let mut data: [u8; 64] = [0; 64];
     let mut rng = StdRng::seed_from_u64(42);
 
-    const NOPS: usize = 100_000_000;
+    let n_ops = 100_000_000;
     let start = Instant::now();
-    for _ in 0..NOPS {
+    for _ in 0..n_ops {
         rng.fill(&mut data);
     }
     let total = start.elapsed();
 
-    println!("nOps: {}", NOPS);
-    let m0 = (total.as_nanos() as f64) / (NOPS as f64);
-    println!("ns/op: {}", m0);
-    println!("total ms: {}", total.as_millis());
+    let m0 = total.as_nanos() as f64 / n_ops as f64;
+    let m1 = total.as_nanos() as f64 / NS_PER_MS;
+    report(
+        "bench_rand64".into(),
+        n_ops,
+        &[
+            &Metric {
+                n: m0,
+                unit: "ns/op".into(),
+            },
+            &Metric {
+                n: m1,
+                unit: "total(ms)".into(),
+            },
+        ],
+    );
 }
 
 #[test]
@@ -49,18 +78,30 @@ fn bench_hash() {
     let mut data: [u8; 64] = [2; 64];
     let mut rng = StdRng::seed_from_u64(42);
 
-    const NOPS: usize = 10_000_000;
+    let n_ops = 10_000_000;
     let start = Instant::now();
-    for _ in 0..NOPS {
+    for _ in 0..n_ops {
         rng.fill(&mut data);
         Sha256::digest(data);
     }
     let total = start.elapsed();
 
-    println!("nOps: {}", NOPS);
-    let m0 = (total.as_nanos() as f64) / (NOPS as f64);
-    println!("ns/op: {}", m0);
-    println!("total ms: {}", total.as_millis());
+    let m0 = total.as_nanos() as f64 / n_ops as f64;
+    let m1 = total.as_nanos() as f64 / NS_PER_MS;
+    report(
+        "bench_hash".into(),
+        n_ops,
+        &[
+            &Metric {
+                n: m0,
+                unit: "ns/op".into(),
+            },
+            &Metric {
+                n: m1,
+                unit: "total(ms)".into(),
+            },
+        ],
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -68,19 +109,31 @@ async fn bench_vrf_eval() {
     let (vrf_sk, vrf_pk) = init_vrf().await;
     let mut data: [u8; 32] = [0; 32];
     let mut rng = StdRng::seed_from_u64(42);
-    const NOPS: usize = 50_000;
+    let n_ops = 50_000;
 
     let start = Instant::now();
-    for _ in 0..NOPS {
+    for _ in 0..n_ops {
         rng.fill(&mut data);
         vrf_sk.evaluate(&vrf_pk, &data);
     }
     let total = start.elapsed();
 
-    println!("nOps: {}", NOPS);
-    let m0 = (total.as_micros() as f64) / (NOPS as f64);
-    println!("us/op: {}", m0);
-    println!("total ms: {}", total.as_millis());
+    let m0 = total.as_nanos() as f64 / NS_PER_US / n_ops as f64;
+    let m1 = total.as_nanos() as f64 / NS_PER_MS;
+    report(
+        "bench_vrf_eval".into(),
+        n_ops,
+        &[
+            &Metric {
+                n: m0,
+                unit: "ns/op".into(),
+            },
+            &Metric {
+                n: m1,
+                unit: "total(ms)".into(),
+            },
+        ],
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -88,10 +141,10 @@ async fn bench_vrf_prove() {
     let (vrf_sk, vrf_pk) = init_vrf().await;
     let mut data: [u8; 32] = [0; 32];
     let mut rng = StdRng::seed_from_u64(42);
-    const NOPS: usize = 50_000;
+    let n_ops = 50_000;
 
     let start = Instant::now();
-    for _ in 0..NOPS {
+    for _ in 0..n_ops {
         rng.fill(&mut data);
         let p = vrf_sk.prove(&vrf_pk, &data);
         // byte enc for comparison with pav.
@@ -99,10 +152,22 @@ async fn bench_vrf_prove() {
     }
     let total = start.elapsed();
 
-    println!("nOps: {}", NOPS);
-    let m0 = (total.as_micros() as f64) / (NOPS as f64);
-    println!("us/op: {}", m0);
-    println!("total ms: {}", total.as_millis());
+    let m0 = total.as_nanos() as f64 / NS_PER_US / n_ops as f64;
+    let m1 = total.as_nanos() as f64 / NS_PER_MS;
+    report(
+        "bench_vrf_prove".into(),
+        n_ops,
+        &[
+            &Metric {
+                n: m0,
+                unit: "ns/op".into(),
+            },
+            &Metric {
+                n: m1,
+                unit: "total(ms)".into(),
+            },
+        ],
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -110,10 +175,10 @@ async fn bench_vrf_verify() {
     let (vrf_sk, vrf_pk) = init_vrf().await;
     let mut data: [u8; 32] = [0; 32];
     let mut rng = StdRng::seed_from_u64(42);
-    const NOPS: usize = 30_000;
+    let n_ops = 30_000;
 
     let start = Instant::now();
-    for _ in 0..NOPS {
+    for _ in 0..n_ops {
         rng.fill(&mut data);
         let p0 = vrf_sk.prove(&vrf_pk, &data);
         // byte enc for comparison with pav.
@@ -123,10 +188,22 @@ async fn bench_vrf_verify() {
     }
     let total = start.elapsed();
 
-    println!("nOps: {}", NOPS);
-    let m0 = (total.as_micros() as f64) / (NOPS as f64);
-    println!("us/op: {}", m0);
-    println!("total ms: {}", total.as_millis());
+    let m0 = total.as_nanos() as f64 / NS_PER_US / n_ops as f64;
+    let m1 = total.as_nanos() as f64 / NS_PER_MS;
+    report(
+        "bench_vrf_verify".into(),
+        n_ops,
+        &[
+            &Metric {
+                n: m0,
+                unit: "ns/op".into(),
+            },
+            &Metric {
+                n: m1,
+                unit: "total(ms)".into(),
+            },
+        ],
+    );
 }
 
 async fn init_vrf() -> (VRFExpandedPrivateKey, VRFPublicKey) {

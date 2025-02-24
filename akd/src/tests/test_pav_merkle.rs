@@ -3,6 +3,7 @@ use std::time::Instant;
 use akd_core::{AzksElement, AzksValue, NodeLabel};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
+use akd::benchutil::{report, Metric};
 use akd::{
     append_only_zks::{AzksParallelismConfig, AzksParallelismOption, InsertMode},
     storage::{manager::StorageManager, memory::AsyncInMemoryDatabase},
@@ -21,13 +22,16 @@ const PAR_CFG: AzksParallelismConfig = AzksParallelismConfig {
     preload: AzksParallelismOption::Disabled,
 };
 
+const NS_PER_US: f64 = 1_000.0;
+const NS_PER_MS: f64 = 1_000_000.0;
+
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_merk_prove() {
     let (mut rng, store, tr) = seed_tr().await;
-    const NOPS: usize = 100_000;
+    let n_ops = 100_000;
 
     let start = Instant::now();
-    for _ in 0..NOPS {
+    for _ in 0..n_ops {
         let l = rand_label(&mut rng);
         tr.get_non_membership_proof::<TC, _>(&store, l)
             .await
@@ -35,19 +39,31 @@ async fn bench_merk_prove() {
     }
     let total = start.elapsed();
 
-    println!("nOps: {}", NOPS);
-    let m0 = (total.as_micros() as f64) / (NOPS as f64);
-    println!("us/op: {}", m0);
-    println!("total ms: {}", total.as_millis());
+    let m0 = total.as_nanos() as f64 / NS_PER_US / n_ops as f64;
+    let m1 = total.as_nanos() as f64 / NS_PER_MS;
+    report(
+        "bench_merk_prove".into(),
+        n_ops,
+        &[
+            &Metric {
+                n: m0,
+                unit: "us/op".into(),
+            },
+            &Metric {
+                n: m1,
+                unit: "total(ms)".into(),
+            },
+        ],
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_merk_put() {
     let (mut rng, store, mut tr) = seed_tr().await;
-    const NOPS: usize = 100_000;
+    let n_ops = 100_000;
 
     let start = Instant::now();
-    for _ in 0..NOPS {
+    for _ in 0..n_ops {
         let elems = vec![AzksElement {
             label: rand_label(&mut rng),
             value: AzksValue(DEFAULT_DIG),
@@ -58,10 +74,22 @@ async fn bench_merk_put() {
     }
     let total = start.elapsed();
 
-    println!("nOps: {}", NOPS);
-    let m0 = (total.as_micros() as f64) / (NOPS as f64);
-    println!("us/op: {}", m0);
-    println!("total ms: {}", total.as_millis());
+    let m0 = total.as_nanos() as f64 / NS_PER_US / n_ops as f64;
+    let m1 = total.as_nanos() as f64 / NS_PER_MS;
+    report(
+        "bench_merk_prove".into(),
+        n_ops,
+        &[
+            &Metric {
+                n: m0,
+                unit: "us/op".into(),
+            },
+            &Metric {
+                n: m1,
+                unit: "total(ms)".into(),
+            },
+        ],
+    );
 }
 
 async fn seed_tr() -> (StdRng, StorageManager<AsyncInMemoryDatabase>, Azks) {
