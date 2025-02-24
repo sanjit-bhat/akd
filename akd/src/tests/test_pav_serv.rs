@@ -27,8 +27,6 @@ const PAR_CFG: AzksParallelismConfig = AzksParallelismConfig {
     insertion: AzksParallelismOption::AvailableOr(0),
     preload: AzksParallelismOption::Disabled,
 };
-const NS_PER_US: f64 = 1_000.0;
-const NS_PER_MS: f64 = 1_000_000.0;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_serv_put_one() {
@@ -50,8 +48,8 @@ async fn bench_serv_put_one() {
     }
     let total = start.elapsed();
 
-    let m0 = total.as_nanos() as f64 / NS_PER_US / n_ops as f64;
-    let m1 = total.as_nanos() as f64 / NS_PER_MS;
+    let m0 = total.as_micros() as f64 / n_ops as f64;
+    let m1 = total.as_millis() as f64;
     report(
         "bench_serv_put_one".into(),
         n_ops,
@@ -104,8 +102,8 @@ async fn put_batch_helper(batch_size: i32) {
     }
     let total = start.elapsed();
 
-    let m0 = total.as_nanos() as f64 / NS_PER_US / (n_batches * batch_size) as f64;
-    let m1 = total.as_nanos() as f64 / NS_PER_MS;
+    let m0 = total.as_micros() as f64 / (n_batches * batch_size) as f64;
+    let m1 = total.as_millis() as f64;
     report(
         "bench_serv_put_batch".into(),
         batch_size,
@@ -138,8 +136,8 @@ async fn bench_serv_get() {
     }
     let total = start.elapsed();
 
-    let m0 = total.as_nanos() as f64 / NS_PER_US / n_ops as f64;
-    let m1 = total.as_nanos() as f64 / NS_PER_MS;
+    let m0 = total.as_micros() as f64 / n_ops as f64;
+    let m1 = total.as_millis() as f64;
     report(
         "bench_serv_get".into(),
         n_ops,
@@ -189,8 +187,8 @@ async fn bench_audit() {
     }
     let total = start.elapsed();
 
-    let m0 = total.as_nanos() as f64 / NS_PER_US / n_ops as f64;
-    let m1 = total.as_nanos() as f64 / NS_PER_MS;
+    let m0 = total.as_micros() as f64 / n_ops as f64;
+    let m1 = total.as_millis() as f64;
     report(
         "bench_serv_audit".into(),
         n_ops,

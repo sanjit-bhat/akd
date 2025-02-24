@@ -10,9 +10,6 @@ use sha2::{Digest, Sha256};
 
 use akd::benchutil::{report, Metric};
 
-const NS_PER_US: f64 = 1_000.0;
-const NS_PER_MS: f64 = 1_000_000.0;
-
 #[test]
 fn bench_rand32() {
     let mut data: [u8; 32] = [0; 32];
@@ -26,7 +23,7 @@ fn bench_rand32() {
     let total = start.elapsed();
 
     let m0 = total.as_nanos() as f64 / n_ops as f64;
-    let m1 = total.as_nanos() as f64 / NS_PER_MS;
+    let m1 = total.as_millis() as f64;
     report(
         "bench_rand32".into(),
         n_ops,
@@ -56,7 +53,7 @@ fn bench_rand64() {
     let total = start.elapsed();
 
     let m0 = total.as_nanos() as f64 / n_ops as f64;
-    let m1 = total.as_nanos() as f64 / NS_PER_MS;
+    let m1 = total.as_millis() as f64;
     report(
         "bench_rand64".into(),
         n_ops,
@@ -87,7 +84,7 @@ fn bench_hash() {
     let total = start.elapsed();
 
     let m0 = total.as_nanos() as f64 / n_ops as f64;
-    let m1 = total.as_nanos() as f64 / NS_PER_MS;
+    let m1 = total.as_millis() as f64;
     report(
         "bench_hash".into(),
         n_ops,
@@ -118,8 +115,8 @@ async fn bench_vrf_eval() {
     }
     let total = start.elapsed();
 
-    let m0 = total.as_nanos() as f64 / NS_PER_US / n_ops as f64;
-    let m1 = total.as_nanos() as f64 / NS_PER_MS;
+    let m0 = total.as_micros() as f64 / n_ops as f64;
+    let m1 = total.as_millis() as f64;
     report(
         "bench_vrf_eval".into(),
         n_ops,
@@ -152,8 +149,8 @@ async fn bench_vrf_prove() {
     }
     let total = start.elapsed();
 
-    let m0 = total.as_nanos() as f64 / NS_PER_US / n_ops as f64;
-    let m1 = total.as_nanos() as f64 / NS_PER_MS;
+    let m0 = total.as_micros() as f64 / n_ops as f64;
+    let m1 = total.as_millis() as f64;
     report(
         "bench_vrf_prove".into(),
         n_ops,
@@ -188,8 +185,8 @@ async fn bench_vrf_verify() {
     }
     let total = start.elapsed();
 
-    let m0 = total.as_nanos() as f64 / NS_PER_US / n_ops as f64;
-    let m1 = total.as_nanos() as f64 / NS_PER_MS;
+    let m0 = total.as_micros() as f64;
+    let m1 = total.as_millis() as f64;
     report(
         "bench_vrf_verify".into(),
         n_ops,

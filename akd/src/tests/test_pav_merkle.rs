@@ -22,9 +22,6 @@ const PAR_CFG: AzksParallelismConfig = AzksParallelismConfig {
     preload: AzksParallelismOption::Disabled,
 };
 
-const NS_PER_US: f64 = 1_000.0;
-const NS_PER_MS: f64 = 1_000_000.0;
-
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_merk_prove() {
     let (mut rng, store, tr) = seed_tr().await;
@@ -39,8 +36,8 @@ async fn bench_merk_prove() {
     }
     let total = start.elapsed();
 
-    let m0 = total.as_nanos() as f64 / NS_PER_US / n_ops as f64;
-    let m1 = total.as_nanos() as f64 / NS_PER_MS;
+    let m0 = total.as_micros() as f64 / n_ops as f64;
+    let m1 = total.as_millis() as f64;
     report(
         "bench_merk_prove".into(),
         n_ops,
@@ -74,8 +71,8 @@ async fn bench_merk_put() {
     }
     let total = start.elapsed();
 
-    let m0 = total.as_nanos() as f64 / NS_PER_US / n_ops as f64;
-    let m1 = total.as_nanos() as f64 / NS_PER_MS;
+    let m0 = total.as_micros() as f64 / n_ops as f64;
+    let m1 = total.as_millis() as f64;
     report(
         "bench_merk_prove".into(),
         n_ops,
