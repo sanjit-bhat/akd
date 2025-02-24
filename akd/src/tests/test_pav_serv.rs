@@ -68,7 +68,7 @@ async fn bench_serv_put_one() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_serv_put_batch() {
-    for sz in [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000] {
+    for sz in [1, 2, 5, 10, 20, 50, 100, 200, 500, 1_000, 2_000, 5_000] {
         put_batch_helper(sz).await;
     }
 }
@@ -102,18 +102,23 @@ async fn put_batch_helper(batch_size: i32) {
     }
     let total = start.elapsed();
 
-    let m0 = total.as_micros() as f64 / (n_batches * batch_size) as f64;
-    let m1 = total.as_millis() as f64;
+    let tput = (n_batches * batch_size) as f64 / total.as_secs_f64();
+    let lat = total.as_micros() as f64 / n_batches as f64;
+    let overall = total.as_millis() as f64;
     report(
         "bench_serv_put_batch".into(),
         batch_size,
         &[
             &Metric {
-                n: m0,
-                unit: "us/op".into(),
+                n: tput,
+                unit: "op/s".into(),
             },
             &Metric {
-                n: m1,
+                n: lat,
+                unit: "us/batch".into(),
+            },
+            &Metric {
+                n: overall,
                 unit: "total(ms)".into(),
             },
         ],
