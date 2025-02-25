@@ -1,6 +1,10 @@
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use rand::prelude::IteratorRandom;
 use std::future::Future;
+use std::sync::Arc;
+use std::thread;
+use std::time::{Duration, Instant};
+use tokio::sync::Mutex;
+use tokio::task::JoinSet;
 
 use akd_core::ecvrf::HardCodedAkdVRF as VRF;
 use akd_core::verify::history::HistoryParams;
@@ -90,7 +94,7 @@ async fn put_batch_helper(batch_size: i32) {
             .collect();
         dir.publish(batch.clone()).await.unwrap();
 
-        let mut join_set = tokio::task::JoinSet::new();
+        let mut join_set = JoinSet::new();
         for (label, _) in batch.into_iter() {
             let dir_clone = dir.clone();
             join_set.spawn(async move {
@@ -358,8 +362,7 @@ fn get_warmup(n_ops: i32) -> i32 {
 async fn bench_serv_get_scale() {
     let (mut _rng, dir, labels, _) = seed_server(DEF_NSEED).await;
     let arc_labels = Arc::new(labels);
-    // TODO: change.
-    let max_n_cli = 10;
+    let max_n_cli: usize = thread::available_parallelism().unwrap().into();
     let mut runner = ClientRunner::new(max_n_cli);
 
     for n_cli in 1..=max_n_cli {
@@ -371,8 +374,10 @@ async fn bench_serv_get_scale() {
             let labels_clone1 = labels_clone0.clone();
 
             async move {
-                // TODO: figure out rand in tokio.
-                let l = &labels_clone1[0];
+                let l = labels_clone1
+                    .iter()
+                    .choose(&mut rand::thread_rng())
+                    .unwrap();
                 dir_clone1.lookup(l.clone()).await.unwrap();
             }
         });
@@ -413,39 +418,40 @@ impl ClientRunner {
     {
         // Clear previous results
         for i in 0..n_cli {
-            self.times[i].lock().unwrap().clear();
+            self.times[i].lock().await.clear();
         }
 
         // Get data.
-        let mut join_handles = Vec::with_capacity(n_cli);
+        let mut join_set = JoinSet::new();
         for i in 0..n_cli {
-            let times = Arc::clone(&self.times[i]);
+            let times_clone = Arc::clone(&self.times[i]);
             let work_clone = work.clone();
 
-            let handle = tokio::spawn(async move {
+            join_set.spawn(async move {
                 let begin = Instant::now();
+                let mut times = times_clone.lock().await;
+
                 loop {
                     let start = Instant::now();
                     work_clone().await;
                     let end = Instant::now();
-                    times.lock().unwrap().push(StartEnd { start, end });
+                    times.push(StartEnd { start, end });
 
                     if end - begin >= Duration::from_secs(1) {
                         break;
                     }
                 }
             });
-            join_handles.push(handle);
         }
-        for handle in join_handles {
-            handle.await.unwrap();
+        while let Some(res) = join_set.join_next().await {
+            let _ = res.unwrap();
         }
 
         // Calculate time bounds
         let mut starts = Vec::with_capacity(n_cli);
         let mut ends = Vec::with_capacity(n_cli);
         for i in 0..n_cli {
-            let times = self.times[i].lock().unwrap();
+            let times = self.times[i].lock().await;
             if let Some(first) = times.first() {
                 starts.push(first.start);
             }
@@ -462,7 +468,7 @@ impl ClientRunner {
         // Collect samples
         self.sample.xs.clear();
         for i in 0..n_cli {
-            let times = self.times[i].lock().unwrap();
+            let times = self.times[i].lock().await;
             let low = times.partition_point(|s| s.start < post_warm);
             let high = times.partition_point(|s| s.end <= end);
             if (high as i64) - (low as i64) < 1_000 {
