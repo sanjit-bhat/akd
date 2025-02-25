@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use std::future::Future;
 
 use akd_core::ecvrf::HardCodedAkdVRF as VRF;
 use akd_core::verify::history::HistoryParams;
@@ -362,12 +363,18 @@ async fn bench_serv_get_scale() {
     let mut runner = ClientRunner::new(max_n_cli);
 
     for n_cli in 1..=max_n_cli {
-        let dir_clone = dir.clone();
-        let labels_clone = arc_labels.clone();
-        let total_time = runner.run(n_cli, async move || {
-            // TODO: figure out rand in tokio.
-            let l = &labels_clone[0];
-            dir_clone.lookup(l.clone()).await.unwrap();
+        let dir_clone0 = dir.clone();
+        let labels_clone0 = arc_labels.clone();
+
+        let _total_time = runner.run(n_cli, move || {
+            let dir_clone1 = dir_clone0.clone();
+            let labels_clone1 = labels_clone0.clone();
+
+            async move {
+                // TODO: figure out rand in tokio.
+                let l = &labels_clone1[0];
+                dir_clone1.lookup(l.clone()).await.unwrap();
+            }
         });
     }
 }
@@ -401,8 +408,8 @@ impl ClientRunner {
 
     async fn run<F, Fut>(&mut self, n_cli: usize, work: F) -> Duration
     where
-        F: Fn() -> Fut + Send + Sync + 'static + Clone,
-        Fut: std::future::Future<Output = ()> + Send + 'static,
+        F: Fn() -> Fut + Send + 'static + Clone,
+        Fut: Future + Send,
     {
         // Clear previous results
         for i in 0..n_cli {
