@@ -142,6 +142,7 @@ async fn test_small_key_history<TC: Configuration>() -> Result<(), AkdError> {
         AkdLabel::from("hello"),
         key_history_proof,
         HistoryVerificationParams::default(),
+        None,
     )?;
 
     assert_eq!(
@@ -231,6 +232,7 @@ async fn test_simple_key_history<TC: Configuration>() -> Result<(), AkdError> {
         AkdLabel::from("hello"),
         key_history_proof,
         HistoryVerificationParams::default(),
+        None,
     )?;
 
     // Key history proof for "hello2"
@@ -251,6 +253,7 @@ async fn test_simple_key_history<TC: Configuration>() -> Result<(), AkdError> {
         AkdLabel::from("hello2"),
         key_history_proof,
         HistoryVerificationParams::default(),
+        None,
     )?;
 
     // Key history proof for "hello3"
@@ -271,6 +274,7 @@ async fn test_simple_key_history<TC: Configuration>() -> Result<(), AkdError> {
         AkdLabel::from("hello3"),
         key_history_proof,
         HistoryVerificationParams::default(),
+        None,
     )?;
 
     // Key history proof for "hello4"
@@ -291,6 +295,7 @@ async fn test_simple_key_history<TC: Configuration>() -> Result<(), AkdError> {
         AkdLabel::from("hello4"),
         key_history_proof.clone(),
         HistoryVerificationParams::default(),
+        None,
     )?;
 
     // history proof with updates of non-decreasing versions/epochs fail to verify
@@ -303,6 +308,7 @@ async fn test_simple_key_history<TC: Configuration>() -> Result<(), AkdError> {
         AkdLabel::from("hello4"),
         borked_proof,
         HistoryVerificationParams::default(),
+        None,
     );
     assert!(result.is_err(), "{}", "{result:?}");
 
@@ -379,6 +385,7 @@ async fn test_complex_verification_many_versions<TC: Configuration>() -> Result<
                 label,
                 history_proof,
                 HistoryVerificationParams::default(),
+                None,
             )?;
             for (j, res) in history_results.iter().enumerate() {
                 let added_in_epoch =
@@ -477,6 +484,7 @@ async fn test_limited_key_history<TC: Configuration>() -> Result<(), AkdError> {
         HistoryVerificationParams::Default {
             history_params: HistoryParams::MostRecent(1),
         },
+        None,
     )?;
 
     // Take the top 3 results, and check that we're getting the right epoch updates
@@ -498,6 +506,7 @@ async fn test_limited_key_history<TC: Configuration>() -> Result<(), AkdError> {
         HistoryVerificationParams::Default {
             history_params: HistoryParams::MostRecent(3),
         },
+        None,
     )?;
 
     Ok(())
@@ -785,6 +794,7 @@ async fn test_tombstoned_key_history<TC: Configuration>() -> Result<(), AkdError
         AkdLabel::from("hello"),
         history_proof.clone(),
         HistoryVerificationParams::default(),
+        None,
     );
     assert!(tombstones.is_err());
 
@@ -799,6 +809,7 @@ async fn test_tombstoned_key_history<TC: Configuration>() -> Result<(), AkdError
         HistoryVerificationParams::AllowMissingValues {
             history_params: HistoryParams::default(),
         },
+        None,
     )?;
     assert_ne!(crate::TOMBSTONE, results[0].value.0);
     assert_ne!(crate::TOMBSTONE, results[1].value.0);

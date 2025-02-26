@@ -497,12 +497,6 @@ where
         // Reverse sort from highest epoch to lowest
         user_data.sort_by(|a, b| b.epoch.cmp(&a.epoch));
 
-        // Apply filters specified by HistoryParams struct
-        user_data = match params {
-            HistoryParams::Complete => user_data,
-            HistoryParams::MostRecent(n) => user_data.into_iter().take(n).collect::<Vec<_>>(),
-        };
-
         if user_data.is_empty() {
             let msg = if let Ok(username_str) = std::str::from_utf8(akd_label) {
                 format!("User {username_str}")
@@ -514,6 +508,13 @@ where
 
         let mut start_version = user_data[0].version;
         let mut end_version = user_data[0].version;
+
+        // Apply filters specified by HistoryParams struct
+        user_data = match params {
+            HistoryParams::Complete => user_data,
+            HistoryParams::MostRecent(n) => user_data.into_iter().take(n).collect::<Vec<_>>(),
+        };
+
         for user_state in &user_data {
             start_version = std::cmp::min(user_state.version, start_version);
             end_version = std::cmp::max(user_state.version, end_version);

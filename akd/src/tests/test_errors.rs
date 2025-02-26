@@ -257,6 +257,7 @@ async fn test_read_during_publish<TC: Configuration>() -> Result<(), AkdError> {
         AkdLabel::from("hello"),
         history_proof,
         HistoryVerificationParams::default(),
+        None,
     )
     .unwrap();
 
@@ -376,6 +377,7 @@ async fn test_malicious_key_history<TC: Configuration>() -> Result<(), AkdError>
         AkdLabel::from("hello"),
         key_history_proof,
         HistoryVerificationParams::default(),
+        None,
     ).expect_err("The key history proof should fail here since the previous value was not marked stale at all");
 
     // Mark the first value for the label "hello" as stale
@@ -401,6 +403,7 @@ async fn test_malicious_key_history<TC: Configuration>() -> Result<(), AkdError>
         AkdLabel::from("hello"),
         key_history_proof,
         HistoryVerificationParams::default(),
+        None,
     ).expect_err("The key history proof should fail here since the previous value was marked stale one epoch too late.");
 
     Ok(())
@@ -456,6 +459,7 @@ async fn test_key_history_verify_malformed<TC: Configuration>() -> Result<(), Ak
         target_label.clone(),
         key_history_proof.clone(),
         correct_verification_params,
+        None,
     )?;
 
     // Using an inconsistent set of history parameters should fail
@@ -474,6 +478,7 @@ async fn test_key_history_verify_malformed<TC: Configuration>() -> Result<(), Ak
             HistoryVerificationParams::Default {
                 history_params: bad_params
             },
+            None,
         )
         .is_err());
     }
@@ -512,7 +517,8 @@ async fn test_key_history_verify_malformed<TC: Configuration>() -> Result<(), Ak
             current_epoch,
             target_label.clone(),
             malformed_proof,
-            correct_verification_params
+            correct_verification_params,
+            None,
         )
         .is_err());
     }
@@ -534,6 +540,7 @@ async fn test_key_history_verify_malformed<TC: Configuration>() -> Result<(), Ak
             target_label.clone(),
             malformed_proof,
             correct_verification_params,
+            None,
         )
         .is_err());
     }

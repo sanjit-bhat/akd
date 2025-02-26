@@ -70,11 +70,19 @@ fn verify_with_history_params(
     akd_label: &AkdLabel,
     proof: &HistoryProof,
     params: HistoryParams,
+    last_version: Option<u64>,
 ) -> Result<(Vec<u64>, Vec<u64>), VerificationError> {
     let num_proofs = proof.update_proofs.len();
 
     // Make sure the update proofs are non-empty
+    /*
     if num_proofs == 0 {
+        return Err(VerificationError::HistoryProof(format!(
+            "No update proofs included in the proof of user {akd_label:?} at epoch {current_epoch:?}!"
+        )));
+    }
+    */
+    if num_proofs == 0 && last_version == None {
         return Err(VerificationError::HistoryProof(format!(
             "No update proofs included in the proof of user {akd_label:?} at epoch {current_epoch:?}!"
         )));
@@ -97,8 +105,16 @@ fn verify_with_history_params(
         }
     }
 
-    let mut start_version = proof.update_proofs[0].version;
-    let mut end_version = proof.update_proofs[0].version;
+    let mut start_version;
+    let mut end_version;
+    if let Some(v) = last_version {
+        start_version = v;
+        end_version = v;
+    } else {
+        start_version = proof.update_proofs[0].version;
+        end_version = proof.update_proofs[0].version;
+    }
+
     proof.update_proofs.iter().for_each(|update_proof| {
         if update_proof.version < start_version {
             start_version = update_proof.version;
@@ -194,6 +210,8 @@ fn verify_with_history_params(
 /// Returns a vector of whether the validity of a hash could be verified.
 /// When false, the value <=> hash validity at the position could not be
 /// verified because the value has been removed ("tombstoned") from the storage layer.
+/// change: add last_version, which should only be set for selfmonitor
+/// proofs, when len(updates) == 0 and the caller knows their number of versions.
 pub fn key_history_verify<TC: Configuration>(
     vrf_public_key: &[u8],
     root_hash: Digest,
@@ -201,6 +219,7 @@ pub fn key_history_verify<TC: Configuration>(
     akd_label: AkdLabel,
     proof: HistoryProof,
     verification_params: HistoryVerificationParams,
+    last_version: Option<u64>,
 ) -> Result<Vec<VerifyResult>, VerificationError> {
     let mut results = Vec::new();
 
@@ -209,7 +228,7 @@ pub fn key_history_verify<TC: Configuration>(
         HistoryVerificationParams::AllowMissingValues { history_params } => history_params,
     };
     let (past_marker_versions, future_marker_versions) =
-        verify_with_history_params(current_epoch, &akd_label, &proof, params)?;
+        verify_with_history_params(current_epoch, &akd_label, &proof, params, last_version)?;
 
     // Verify all individual update proofs
     let mut maybe_previous_update_epoch = None;
