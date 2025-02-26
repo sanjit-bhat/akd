@@ -32,6 +32,7 @@ const PAR_CFG: AzksParallelismConfig = AzksParallelismConfig {
     insertion: AzksParallelismOption::AvailableOr(0),
     preload: AzksParallelismOption::Disabled,
 };
+const NS_PER_US: f64 = 1_000.0;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_serv_put_one() {
@@ -215,7 +216,7 @@ async fn bench_serv_get_one() {
         if i == n_warm {
             start = Instant::now();
         }
-        let l = &labels[i as usize % DEF_NSEED];
+        let l = labels.iter().choose(&mut rand::thread_rng()).unwrap();
         dir.lookup(l.clone()).await.unwrap();
     }
     let total = start.elapsed();
@@ -369,18 +370,20 @@ async fn bench_serv_get_scale() {
         let dir_clone0 = dir.clone();
         let labels_clone0 = arc_labels.clone();
 
-        let _total_time = runner.run(n_cli, move || {
-            let dir_clone1 = dir_clone0.clone();
-            let labels_clone1 = labels_clone0.clone();
+        let _total_time = runner
+            .run(n_cli, move || {
+                let dir_clone1 = dir_clone0.clone();
+                let labels_clone1 = labels_clone0.clone();
 
-            async move {
-                let l = labels_clone1
-                    .iter()
-                    .choose(&mut rand::thread_rng())
-                    .unwrap();
-                dir_clone1.lookup(l.clone()).await.unwrap();
-            }
-        });
+                async move {
+                    let l = labels_clone1
+                        .iter()
+                        .choose(&mut rand::thread_rng())
+                        .unwrap();
+                    dir_clone1.lookup(l.clone()).await.unwrap();
+                }
+            })
+            .await;
     }
 }
 
@@ -390,8 +393,70 @@ struct StartEnd {
     end: Instant,
 }
 
+// Rust port of https://github.com/aclements/go-moremath/blob/master/stats/sample.go,
+// without weighting.
 struct Sample {
     xs: Vec<f64>,
+}
+
+impl Sample {
+    fn mean(&self) -> f64 {
+        if self.xs.len() == 0 {
+            return f64::NAN;
+        }
+        let mut m: f64 = 0.0;
+        for (i, x) in self.xs.iter().enumerate() {
+            m += (x - m) / (i + 1) as f64;
+        }
+        m
+    }
+
+    fn variance(&self) -> f64 {
+        if self.xs.len() == 0 {
+            return f64::NAN;
+        } else if self.xs.len() <= 1 {
+            return 0.0;
+        }
+
+        let mut mean = 0.0;
+        let mut m2 = 0.0;
+        for (n, x) in self.xs.iter().enumerate() {
+            let delta = x - mean;
+            mean += delta / (n + 1) as f64;
+            m2 += delta * (x - mean);
+        }
+        return m2 / (self.xs.len() - 1) as f64;
+    }
+
+    fn stddev(&self) -> f64 {
+        return self.variance().sqrt();
+    }
+
+    fn golang_modf(f: f64) -> (f64, f64) {
+        return (f.trunc(), f.fract());
+    }
+
+    fn quantile(&self, q: f64) -> f64 {
+        if self.xs.len() == 0 {
+            return f64::NAN;
+        } else if q <= 0.0 {
+            return *self.xs.first().unwrap();
+        } else if q >= 1.0 {
+            return *self.xs.last().unwrap();
+        }
+
+        let big_n = self.xs.len() as f64;
+        let n = 1.0 / 3.0 + q * (big_n + 1.0 / 3.0);
+        let (kf, frac) = Self::golang_modf(n);
+        let k = kf as i64;
+        if k <= 0 {
+            return *self.xs.first().unwrap();
+        } else if k as usize >= self.xs.len() {
+            return *self.xs.last().unwrap();
+        }
+        return self.xs[(k - 1) as usize]
+            + frac * (self.xs[k as usize] - self.xs[(k - 1) as usize]);
+    }
 }
 
 struct ClientRunner {
@@ -416,7 +481,6 @@ impl ClientRunner {
         F: Fn() -> Fut + Send + 'static + Clone,
         Fut: Future + Send,
     {
-        // Clear previous results
         for i in 0..n_cli {
             self.times[i].lock().await.clear();
         }
@@ -428,8 +492,8 @@ impl ClientRunner {
             let work_clone = work.clone();
 
             join_set.spawn(async move {
-                let begin = Instant::now();
                 let mut times = times_clone.lock().await;
+                let cli_begin = Instant::now();
 
                 loop {
                     let start = Instant::now();
@@ -437,7 +501,7 @@ impl ClientRunner {
                     let end = Instant::now();
                     times.push(StartEnd { start, end });
 
-                    if end - begin >= Duration::from_secs(1) {
+                    if end - cli_begin >= Duration::from_secs(1) {
                         break;
                     }
                 }
@@ -447,7 +511,7 @@ impl ClientRunner {
             let _ = res.unwrap();
         }
 
-        // Calculate time bounds
+        // Calculate time bounds.
         let mut starts = Vec::with_capacity(n_cli);
         let mut ends = Vec::with_capacity(n_cli);
         for i in 0..n_cli {
@@ -465,13 +529,13 @@ impl ClientRunner {
         let end = ends.into_iter().min().unwrap();
         let total = end - post_warm;
 
-        // Collect samples
+        // Collect samples.
         self.sample.xs.clear();
         for i in 0..n_cli {
             let times = self.times[i].lock().await;
             let low = times.partition_point(|s| s.start < post_warm);
             let high = times.partition_point(|s| s.end <= end);
-            if (high as i64) - (low as i64) < 1_000 {
+            if (high as i64) - (low as i64) < 200 {
                 panic!("ClientRunner: clients don't have enough overlapping samples");
             }
 
