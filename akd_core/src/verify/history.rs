@@ -87,6 +87,9 @@ fn verify_with_history_params(
             "No update proofs included in the proof of user {akd_label:?} at epoch {current_epoch:?}!"
         )));
     }
+    if num_proofs != 0 && last_version != None {
+        return Err(VerificationError::HistoryProof(format!("Bad config")));
+    }
 
     // Check that the sent proofs are for a contiguous sequence of decreasing versions
     for count in 1..num_proofs {
