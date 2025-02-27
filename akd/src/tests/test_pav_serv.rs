@@ -583,7 +583,7 @@ async fn bench_selfmon_verify() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn bench_audit_one() {
+async fn bench_audit_batch() {
     let (serv, _, fst_dig) = seed_server(DEF_NSEED).await;
     let mut aud = Auditor::<TC>::new(PAR_CFG).await;
     {
@@ -622,7 +622,7 @@ async fn bench_audit_one() {
     let m0 = total.as_micros() as f64 / n_ops as f64;
     let m1 = total.as_millis() as f64;
     report(
-        "bench_audit_one".into(),
+        "bench_audit_batch".into(),
         n_ops,
         &[
             &Metric {
