@@ -349,40 +349,73 @@ async fn bench_get_size_multi() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_get_verify() {
-    let (serv, labels, _) = seed_server(DEF_NSEED).await;
-    let vrf_pk = serv.get_public_key().await.unwrap().to_bytes();
-    let n_ops = 3_000;
-    let n_warm = get_warmup(n_ops);
+    let max_n_vers = 10;
+    for n_vers in 1..=max_n_vers {
+        let (n_ops, total_gen, total_verify) = get_verify_helper(n_vers).await;
 
-    let mut total: Duration = Default::default();
+        let m0 = total_gen.as_micros() as f64 / n_ops as f64;
+        let m1 = total_gen.as_millis() as f64;
+        let m2 = total_verify.as_micros() as f64 / n_ops as f64;
+        let m3 = total_verify.as_millis() as f64;
+
+        report(
+            "bench_get_verify".into(),
+            n_vers,
+            &[
+                &Metric {
+                    n: m0,
+                    unit: "us/op(gen)".into(),
+                },
+                &Metric {
+                    n: m1,
+                    unit: "total(ms,gen)".into(),
+                },
+                &Metric {
+                    n: m2,
+                    unit: "us/op(ver)".into(),
+                },
+                &Metric {
+                    n: m3,
+                    unit: "total(ms,ver)".into(),
+                },
+            ],
+        );
+    }
+}
+
+async fn get_verify_helper(n_vers: i32) -> (i32, Duration, Duration) {
+    let (serv, _, _) = seed_server(DEF_NSEED).await;
+    let vrf_pk = serv.get_public_key().await.unwrap().to_bytes();
+    let n_ops = 1_000;
+    let n_warm = get_warmup(n_ops);
+    let mut total_gen: Duration = Default::default();
+    let mut total_verify: Duration = Default::default();
+
     for i in 0..n_warm + n_ops {
         if i == n_warm {
-            total = Default::default();
+            total_gen = Default::default();
+            total_verify = Default::default();
         }
-        let l = labels.iter().choose(&mut rand::thread_rng()).unwrap();
+
+        let l = mk_rand_label();
+        let elem = vec![(l.clone(), mk_def_val())];
+        for _ in 0..n_vers {
+            serv.publish(elem.clone()).await.unwrap();
+        }
+
+        let s0 = Instant::now();
         let (p, dig) = serv.lookup(l.clone()).await.unwrap();
+        total_gen += s0.elapsed();
 
-        let s = Instant::now();
+        if p.version as i32 != n_vers {
+            panic!("get_verify_helper: wrong version");
+        }
+
+        let s1 = Instant::now();
         lookup_verify::<TC>(&vrf_pk, dig.hash(), dig.epoch(), l.clone(), p).unwrap();
-        total += s.elapsed();
+        total_verify += s1.elapsed();
     }
-
-    let m0 = total.as_micros() as f64 / n_ops as f64;
-    let m1 = total.as_millis() as f64;
-    report(
-        "bench_get_verify".into(),
-        n_ops,
-        &[
-            &Metric {
-                n: m0,
-                unit: "us/op".into(),
-            },
-            &Metric {
-                n: m1,
-                unit: "total(ms)".into(),
-            },
-        ],
-    );
+    (n_ops, total_gen, total_verify)
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -703,6 +736,7 @@ async fn bench_scale_time() {
     );
     let n_insert = 236_500_000;
     let n_measure = 500_000;
+    // TODO: see if this actually the best batch size.
     let batch_sz = 1_000;
 
     for i in (0..n_insert).step_by(n_measure) {
