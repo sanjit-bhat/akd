@@ -42,7 +42,7 @@ const NS_PER_US: f64 = 1_000.0;
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_put_one() {
     let (serv, _labels, _) = seed_server(DEF_NSEED).await;
-    let n_ops = 6_000;
+    let n_ops = 10_000;
     let n_warm = get_warmup(n_ops);
 
     let mut start = Instant::now();
@@ -143,7 +143,7 @@ async fn put_batch_helper(serv: &Arc<Directory<TC, DB, VRF>>, batch_sz: i32) -> 
 async fn bench_put_verify() {
     let (serv, labels, _) = seed_server(DEF_NSEED).await;
     let vrf_pk = serv.get_public_key().await.unwrap();
-    let n_ops = 6_000;
+    let n_ops = 10_000;
     let n_warm = get_warmup(n_ops);
 
     let mut total: Duration = Default::default();
@@ -215,7 +215,7 @@ async fn bench_put_size() {
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_get_one() {
     let (serv, labels, _) = seed_server(DEF_NSEED).await;
-    let n_ops = 6_000;
+    let n_ops = 10_000;
     let n_warm = get_warmup(n_ops);
 
     let mut start = Instant::now();
@@ -365,7 +365,7 @@ async fn bench_get_verify() {
 async fn get_verify_helper(n_vers: i32) -> (i32, Duration, Duration) {
     let (serv, _, _) = seed_server(DEF_NSEED).await;
     let vrf_pk = serv.get_public_key().await.unwrap().to_bytes();
-    let n_ops = 6_000;
+    let n_ops = 10_000;
     let n_warm = get_warmup(n_ops);
     let mut total_gen: Duration = Default::default();
     let mut total_verify: Duration = Default::default();
@@ -400,7 +400,7 @@ async fn get_verify_helper(n_vers: i32) -> (i32, Duration, Duration) {
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_selfmon_one() {
     let (serv, labels, _) = seed_server(DEF_NSEED).await;
-    let n_ops = 6_000;
+    let n_ops = 20_000;
     let n_warm = get_warmup(n_ops);
 
     let mut start = Instant::now();
@@ -513,7 +513,7 @@ async fn bench_selfmon_size() {
 async fn bench_selfmon_verify() {
     let (serv, labels, _) = seed_server(DEF_NSEED).await;
     let vrf_pk = serv.get_public_key().await.unwrap().to_bytes();
-    let n_ops = 6_000;
+    let n_ops = 20_000;
     let n_warm = get_warmup(n_ops);
 
     let mut total: Duration = Default::default();
