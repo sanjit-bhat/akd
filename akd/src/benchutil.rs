@@ -7,7 +7,7 @@ pub struct Metric {
 
 pub fn report(caller_name: String, n_ops: i32, metrics: &[&Metric]) {
     let mut buf = String::new();
-    write!(buf, "{:<20}\t{:8}\t", caller_name, n_ops).unwrap();
+    write!(buf, "{:<20}\t{:8}", caller_name, n_ops).unwrap();
 
     for metric in metrics {
         buf.push('\t');
