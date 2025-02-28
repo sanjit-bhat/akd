@@ -564,15 +564,7 @@ async fn bench_selfmon_verify() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_audit_batch() {
-    let (serv, _, fst_dig) = seed_server(DEF_NSEED).await;
-    let mut aud = Auditor::<TC>::new(PAR_CFG).await;
-    {
-        let snd_dig = serv.get_epoch_hash().await.unwrap();
-        let p = serv.audit(fst_dig.epoch(), snd_dig.epoch()).await.unwrap();
-        aud.audit(vec![fst_dig.hash(), snd_dig.hash()], p)
-            .await
-            .unwrap();
-    }
+    let (serv, _, mut aud) = seed_server(DEF_NSEED).await;
     let n_ops = 100;
     let n_warm = get_warmup(n_ops);
     let n_insert = 1_000;
@@ -756,15 +748,14 @@ async fn bench_scale_time() {
 
 pub async fn seed_server(
     n_seed: usize,
-) -> (Arc<Directory<TC, DB, VRF>>, Arc<Vec<AkdLabel>>, EpochHash) {
+) -> (Arc<Directory<TC, DB, VRF>>, Arc<Vec<AkdLabel>>, Auditor<TC>) {
     let db = AsyncInMemoryDatabase::new();
     let store = StorageManager::new_no_cache(db);
     let vrf = VRF {};
     let serv = Directory::<TC, _, _>::new(store, vrf, PAR_CFG)
         .await
         .unwrap();
-    let h = serv.get_epoch_hash().await.unwrap();
-
+    let mut aud = Auditor::<TC>::new(PAR_CFG).await;
     let labels: Vec<AkdLabel> = (0..n_seed).map(|_| mk_rand_label()).collect();
 
     // WhatsApp actually has around 1M epochs (as of 2025-02-28),
@@ -776,15 +767,35 @@ pub async fn seed_server(
     }
     for i in 0..n_ep {
         let elem = vec![(labels[i].clone(), mk_rand_val())];
+        let start_dig = serv.get_epoch_hash().await.unwrap();
         serv.publish(elem).await.unwrap();
+        let end_dig = serv.get_epoch_hash().await.unwrap();
+        let p = serv
+            .audit(start_dig.epoch(), end_dig.epoch())
+            .await
+            .unwrap();
+        aud.audit(vec![start_dig.hash(), end_dig.hash()], p)
+            .await
+            .unwrap();
     }
 
     let rem: Vec<(AkdLabel, AkdValue)> = labels[n_ep..]
         .iter()
         .map(|l| (l.clone(), mk_rand_val()))
         .collect();
-    serv.publish(rem).await.unwrap();
-    (Arc::new(serv), Arc::new(labels), h)
+    {
+        let start_dig = serv.get_epoch_hash().await.unwrap();
+        serv.publish(rem).await.unwrap();
+        let end_dig = serv.get_epoch_hash().await.unwrap();
+        let p = serv
+            .audit(start_dig.epoch(), end_dig.epoch())
+            .await
+            .unwrap();
+        aud.audit(vec![start_dig.hash(), end_dig.hash()], p)
+            .await
+            .unwrap();
+    }
+    (Arc::new(serv), Arc::new(labels), aud)
 }
 
 pub fn mk_rand_label() -> AkdLabel {
