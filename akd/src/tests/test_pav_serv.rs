@@ -401,7 +401,7 @@ async fn get_verify_helper(n_vers: i32) -> (i32, Duration, Duration) {
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_selfmon_one() {
     let (serv, labels, _) = seed_server(DEF_NSEED).await;
-    let n_ops = 6_000;
+    let n_ops = 2_000;
     let n_warm = get_warmup(n_ops);
 
     let mut start = Instant::now();
@@ -514,7 +514,7 @@ async fn bench_selfmon_size() {
 async fn bench_selfmon_verify() {
     let (serv, labels, _) = seed_server(DEF_NSEED).await;
     let vrf_pk = serv.get_public_key().await.unwrap().to_bytes();
-    let n_ops = 6_000;
+    let n_ops = 2_000;
     let n_warm = get_warmup(n_ops);
 
     let mut total: Duration = Default::default();
@@ -766,12 +766,21 @@ pub async fn seed_server(
     let h = serv.get_epoch_hash().await.unwrap();
 
     let labels: Vec<AkdLabel> = (0..nseed).map(|_| mk_rand_label()).collect();
-    let seed: Vec<(AkdLabel, AkdValue)> = labels
-        .clone()
-        .into_iter()
-        .map(|l| (l, mk_rand_val()))
+
+    // WhatsApp actually has around 1M epochs (as of 2025-02-28),
+    // but 65_536 is the biggest future marker version less than that.
+    // see get_marker_versions.
+    let n_ep = 65_536;
+    for i in 0..n_ep {
+        let elem = vec![(labels[i].clone(), mk_rand_val())];
+        serv.publish(elem).await.unwrap();
+    }
+
+    let rem: Vec<(AkdLabel, AkdValue)> = labels[n_ep..]
+        .iter()
+        .map(|l| (l.clone(), mk_rand_val()))
         .collect();
-    serv.publish(seed).await.unwrap();
+    serv.publish(rem).await.unwrap();
     (Arc::new(serv), Arc::new(labels), h)
 }
 
