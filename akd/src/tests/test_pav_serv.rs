@@ -401,7 +401,7 @@ async fn get_verify_helper(n_vers: i32) -> (i32, Duration, Duration) {
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_selfmon_one() {
     let (serv, labels, _) = seed_server(DEF_NSEED).await;
-    let n_ops = 2_000;
+    let n_ops = 3_000;
     let n_warm = get_warmup(n_ops);
 
     let mut start = Instant::now();
@@ -514,7 +514,7 @@ async fn bench_selfmon_size() {
 async fn bench_selfmon_verify() {
     let (serv, labels, _) = seed_server(DEF_NSEED).await;
     let vrf_pk = serv.get_public_key().await.unwrap().to_bytes();
-    let n_ops = 2_000;
+    let n_ops = 3_000;
     let n_warm = get_warmup(n_ops);
 
     let mut total: Duration = Default::default();
