@@ -152,8 +152,7 @@ async fn bench_put_verify() {
         if i == n_warm {
             total = Default::default();
         }
-        // TODO: make sure all these using rand index.
-        let l = &labels[i as usize % DEF_NSEED];
+        let l = labels.iter().choose(&mut rand::thread_rng()).unwrap();
         let (p, dig) = serv
             .key_history(l, HistoryParams::MostRecent(1))
             .await
