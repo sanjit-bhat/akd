@@ -755,7 +755,7 @@ async fn bench_scale_time() {
 }
 
 pub async fn seed_server(
-    nseed: usize,
+    n_seed: usize,
 ) -> (Arc<Directory<TC, DB, VRF>>, Arc<Vec<AkdLabel>>, EpochHash) {
     let db = AsyncInMemoryDatabase::new();
     let store = StorageManager::new_no_cache(db);
@@ -765,12 +765,15 @@ pub async fn seed_server(
         .unwrap();
     let h = serv.get_epoch_hash().await.unwrap();
 
-    let labels: Vec<AkdLabel> = (0..nseed).map(|_| mk_rand_label()).collect();
+    let labels: Vec<AkdLabel> = (0..n_seed).map(|_| mk_rand_label()).collect();
 
     // WhatsApp actually has around 1M epochs (as of 2025-02-28),
     // but 65_536 is the biggest future marker version less than that.
     // see get_marker_versions.
     let n_ep = 65_536;
+    if n_seed < n_ep {
+        panic!("n_seed too small");
+    }
     for i in 0..n_ep {
         let elem = vec![(labels[i].clone(), mk_rand_val())];
         serv.publish(elem).await.unwrap();
