@@ -194,10 +194,8 @@ async fn bench_put_verify() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_put_size() {
-    let (serv, _labels, _) = seed_server(DEF_NSEED).await;
-    let l = mk_rand_label();
-    let elem = vec![(l.clone(), mk_rand_val())];
-    serv.publish(elem).await.unwrap();
+    let (serv, labels, _) = seed_server(DEF_NSEED).await;
+    let l = &labels[0];
     let (p, dig) = serv
         .key_history(&l, HistoryParams::MostRecent(1))
         .await
@@ -398,8 +396,8 @@ async fn get_verify_helper(n_vers: i32) -> (i32, Duration, Duration) {
         }
 
         let l = mk_rand_label();
-        let elem = vec![(l.clone(), mk_rand_val())];
         for _ in 0..n_vers {
+            let elem = vec![(l.clone(), mk_rand_val())];
             serv.publish(elem.clone()).await.unwrap();
         }
 
@@ -408,7 +406,7 @@ async fn get_verify_helper(n_vers: i32) -> (i32, Duration, Duration) {
         total_gen += s0.elapsed();
 
         if p.version as i32 != n_vers {
-            panic!("get_verify_helper: wrong version");
+            panic!("wrong version");
         }
 
         let s1 = Instant::now();
@@ -765,7 +763,7 @@ async fn bench_scale_time() {
 
         let added = (n_batches + get_warmup(n_batches)) * batch_sz;
         if added > n_measure as i32 {
-            panic!("bench_scale_time");
+            panic!("put scaling inserted too many elems");
         }
         let rem: Vec<(AkdLabel, AkdValue)> = (0..(n_measure as i32 - added))
             .map(|_| (mk_rand_label(), mk_rand_val()))
