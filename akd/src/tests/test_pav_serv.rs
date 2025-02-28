@@ -300,25 +300,7 @@ async fn bench_get_scale() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn bench_get_size_one() {
-    let (serv, labels, _) = seed_server(DEF_NSEED).await;
-    let l = &labels[0];
-    let (p, dig) = serv.lookup(l.clone()).await.unwrap();
-    let pb = bincode::serialize(&p).unwrap();
-    let digb = bincode::serialize(&dig).unwrap();
-    let sz = (pb.len() + digb.len()) as f64;
-    report(
-        "bench_get_size_one".into(),
-        1,
-        &[&Metric {
-            n: sz,
-            unit: "B".into(),
-        }],
-    );
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn bench_get_size_multi() {
+async fn bench_get_size() {
     let (serv, _labels, _) = seed_server(DEF_NSEED).await;
     let max_n_vers = 10;
     let label = mk_rand_label();
@@ -335,7 +317,7 @@ async fn bench_get_size_multi() {
         let digb = bincode::serialize(&dig).unwrap();
         let sz = (pb.len() + digb.len()) as f64;
         report(
-            "bench_get_size_multi".into(),
+            "bench_get_size".into(),
             n_vers as i32,
             &[&Metric {
                 n: sz,
