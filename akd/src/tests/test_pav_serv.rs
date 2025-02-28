@@ -52,7 +52,7 @@ async fn bench_put_one() {
             start = Instant::now();
         }
         let l = mk_rand_label();
-        let elem = vec![(l.clone(), mk_def_val())];
+        let elem = vec![(l.clone(), mk_rand_val())];
         serv.publish(elem).await.unwrap();
         serv.key_history(&l, HistoryParams::MostRecent(1))
             .await
@@ -119,7 +119,7 @@ async fn put_batch_helper(serv: &Arc<Directory<TC, DB, VRF>>, batch_sz: i32) -> 
         }
 
         let batch: Vec<(AkdLabel, AkdValue)> = (0..batch_sz)
-            .map(|_| (mk_rand_label(), mk_def_val()))
+            .map(|_| (mk_rand_label(), mk_rand_val()))
             .collect();
         serv.publish(batch.clone()).await.unwrap();
 
@@ -152,6 +152,7 @@ async fn bench_put_verify() {
         if i == n_warm {
             total = Default::default();
         }
+        // TODO: make sure all these using rand index.
         let l = &labels[i as usize % DEF_NSEED];
         let (p, dig) = serv
             .key_history(l, HistoryParams::MostRecent(1))
@@ -196,7 +197,7 @@ async fn bench_put_verify() {
 async fn bench_put_size() {
     let (serv, _labels, _) = seed_server(DEF_NSEED).await;
     let l = mk_rand_label();
-    let elem = vec![(l.clone(), mk_def_val())];
+    let elem = vec![(l.clone(), mk_rand_val())];
     serv.publish(elem).await.unwrap();
     let (p, dig) = serv
         .key_history(&l, HistoryParams::MostRecent(1))
@@ -326,8 +327,8 @@ async fn bench_get_size_multi() {
     let label = mk_rand_label();
 
     for n_vers in 1..=max_n_vers {
-        let elem = vec![(label.clone(), mk_def_val())];
-        serv.publish(elem).await.unwrap();
+        let elem = vec![(label.clone(), mk_rand_val())];
+        serv.publish(elem.clone()).await.unwrap();
 
         let (p, dig) = serv.lookup(label.clone()).await.unwrap();
         if p.version != n_vers {
@@ -398,7 +399,7 @@ async fn get_verify_helper(n_vers: i32) -> (i32, Duration, Duration) {
         }
 
         let l = mk_rand_label();
-        let elem = vec![(l.clone(), mk_def_val())];
+        let elem = vec![(l.clone(), mk_rand_val())];
         for _ in 0..n_vers {
             serv.publish(elem.clone()).await.unwrap();
         }
@@ -604,7 +605,7 @@ async fn bench_audit_batch() {
         }
         let start_dig = serv.get_epoch_hash().await.unwrap();
         let new_els: Vec<(AkdLabel, AkdValue)> = (0..n_insert)
-            .map(|_| (mk_rand_label(), mk_def_val()))
+            .map(|_| (mk_rand_label(), mk_rand_val()))
             .collect();
         let end_dig = serv.publish(new_els).await.unwrap();
 
@@ -644,7 +645,7 @@ async fn bench_audit_size() {
 
     let start_dig = serv.get_epoch_hash().await.unwrap();
     let new_els: Vec<(AkdLabel, AkdValue)> = (0..n_insert)
-        .map(|_| (mk_rand_label(), mk_def_val()))
+        .map(|_| (mk_rand_label(), mk_rand_val()))
         .collect();
     let end_dig = serv.publish(new_els).await.unwrap();
     let p = serv
@@ -708,7 +709,7 @@ async fn bench_scale_alloc() {
 
     for i in (0..n_insert).step_by(n_measure) {
         let new_els: Vec<(AkdLabel, AkdValue)> = (0..n_measure)
-            .map(|_| (mk_rand_label(), mk_def_val()))
+            .map(|_| (mk_rand_label(), mk_rand_val()))
             .collect();
         serv.publish(new_els).await.unwrap();
 
@@ -768,7 +769,7 @@ async fn bench_scale_time() {
             panic!("bench_scale_time");
         }
         let rem: Vec<(AkdLabel, AkdValue)> = (0..(n_measure as i32 - added))
-            .map(|_| (mk_rand_label(), mk_def_val()))
+            .map(|_| (mk_rand_label(), mk_rand_val()))
             .collect();
         serv.publish(rem).await.unwrap();
     }
@@ -789,7 +790,7 @@ pub async fn seed_server(
     let seed: Vec<(AkdLabel, AkdValue)> = labels
         .clone()
         .into_iter()
-        .map(|l| (l, mk_def_val()))
+        .map(|l| (l, mk_rand_val()))
         .collect();
     serv.publish(seed).await.unwrap();
     (Arc::new(serv), Arc::new(labels), h)
@@ -802,13 +803,11 @@ pub fn mk_rand_label() -> AkdLabel {
     AkdLabel(bytes)
 }
 
-pub fn mk_def_val() -> AkdValue {
+pub fn mk_rand_val() -> AkdValue {
     // 32 bytes for ed25519 pk.
     let mut v = vec![0; 32];
-    for i in 0..32 {
-        v[i] = 2
-    }
-    return AkdValue(v);
+    rand::thread_rng().fill_bytes(&mut v);
+    AkdValue(v)
 }
 
 pub fn get_warmup(n_ops: i32) -> i32 {
