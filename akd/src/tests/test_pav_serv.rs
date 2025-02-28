@@ -10,7 +10,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use akd::storage::memory::AsyncInMemoryDatabase;
 use akd::storage::StorageManager;
 use akd::Directory;
-use akd::EpochHash;
 
 use akd_core::ecvrf::HardCodedAkdVRF as VRF;
 use rand::prelude::IteratorRandom;
