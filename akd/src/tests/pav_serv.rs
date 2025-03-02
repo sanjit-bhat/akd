@@ -676,6 +676,8 @@ async fn bench_scale_alloc() {
         .unwrap();
     let n_insert = 236_500_000;
     let n_measure = 500_000;
+    let mut sys_info = sysinfo::System::new();
+    sys_info.refresh_memory_specifics(sysinfo::MemoryRefreshKind::nothing().with_ram());
 
     for i in (0..n_insert).step_by(n_measure) {
         let new_els: Vec<(AkdLabel, AkdValue)> = (0..n_measure)
@@ -683,14 +685,23 @@ async fn bench_scale_alloc() {
             .collect();
         serv.publish(new_els).await.unwrap();
 
-        let mb = curr_alloc() as f64 / 1_000_000.0;
+        sys_info.refresh_memory_specifics(sysinfo::MemoryRefreshKind::nothing().with_ram());
+
+        let mb0 = curr_alloc() as f64 / 1_000_000.0;
+        let mb1 = sys_info.used_memory() as f64 / 1_000_000.0;
         report(
             "bench_scale_alloc".into(),
             (i + n_measure) as i32,
-            &[&Metric {
-                n: mb,
-                unit: "MB".into(),
-            }],
+            &[
+                &Metric {
+                    n: mb0,
+                    unit: "MB".into(),
+                },
+                &Metric {
+                    n: mb1,
+                    unit: "MB(used)".into(),
+                },
+            ],
         );
     }
 }
