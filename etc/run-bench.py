@@ -24,7 +24,6 @@ elif bench_class == "scale_time":
         "bench_scale_time",
     ]
 elif bench_class == "scale_alloc":
-    print("note: remember to uncomment global alloc")
     bench_tests = [
         "bench_scale_alloc",
     ]

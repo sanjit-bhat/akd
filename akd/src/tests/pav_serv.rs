@@ -4,9 +4,6 @@ use std::future::Future;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use std::alloc::{GlobalAlloc, Layout, System};
-use std::sync::atomic::{AtomicUsize, Ordering};
-
 use akd::storage::memory::AsyncInMemoryDatabase;
 use akd::storage::StorageManager;
 use akd::Directory;
@@ -635,37 +632,6 @@ async fn bench_audit_size() {
     );
 }
 
-static ALLOCATED_BYTES: AtomicUsize = AtomicUsize::new(0);
-
-#[allow(dead_code)]
-struct TrackingAllocator;
-
-unsafe impl GlobalAlloc for TrackingAllocator {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        let ptr = System.alloc(layout);
-        if !ptr.is_null() {
-            ALLOCATED_BYTES.fetch_add(layout.size(), Ordering::Relaxed);
-        }
-        ptr
-    }
-
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        System.dealloc(ptr, layout);
-        ALLOCATED_BYTES.fetch_sub(layout.size(), Ordering::Relaxed);
-    }
-}
-
-pub fn curr_alloc() -> usize {
-    ALLOCATED_BYTES.load(Ordering::Relaxed)
-}
-
-// NOTE: uncomment only for bench_scale_alloc.
-/*
-#[global_allocator]
-static GLOBAL_ALLOC: TrackingAllocator = TrackingAllocator;
-*/
-
-// NOTE: uncomment GLOBAL_ALLOC.
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_scale_alloc() {
     let db = AsyncInMemoryDatabase::new();
@@ -679,8 +645,8 @@ async fn bench_scale_alloc() {
 
     let mut sys_info = sysinfo::System::new();
     let pid = sysinfo::get_current_pid().unwrap();
-    sys_info.refresh_memory();
     sys_info.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[pid]), true);
+    sys_info.refresh_memory();
 
     for i in (0..n_insert).step_by(n_measure) {
         let new_els: Vec<(AkdLabel, AkdValue)> = (0..n_measure)
@@ -688,26 +654,21 @@ async fn bench_scale_alloc() {
             .collect();
         serv.publish(new_els).await.unwrap();
 
-        sys_info.refresh_memory();
         sys_info.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[pid]), true);
+        sys_info.refresh_memory();
 
-        let mb0 = curr_alloc() as f64 / 1_000_000.0;
-        let mb1 = sys_info.process(pid).unwrap().memory() as f64 / 1_000_000.0;
-        let mb2 = sys_info.used_memory() as f64 / 1_000_000.0;
+        let mb0 = sys_info.process(pid).unwrap().memory() as f64 / 1_000_000.0;
+        let mb1 = sys_info.used_memory() as f64 / 1_000_000.0;
         report(
             "bench_scale_alloc".into(),
             (i + n_measure) as i32,
             &[
                 &Metric {
                     n: mb0,
-                    unit: "MB".into(),
-                },
-                &Metric {
-                    n: mb1,
                     unit: "MB(proc)".into(),
                 },
                 &Metric {
-                    n: mb2,
+                    n: mb1,
                     unit: "MB(sys)".into(),
                 },
             ],
