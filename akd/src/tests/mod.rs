@@ -10,9 +10,9 @@
 mod test_core_protocol;
 mod test_errors;
 mod test_preloads;
-mod test_pav_serv;
-mod test_pav_crypto;
-mod test_pav_merkle;
+mod pav_serv;
+mod pav_crypto;
+mod pav_merkle;
 
 use std::collections::HashMap;
 
