@@ -68,6 +68,6 @@ for name in bench_tests:
             "--nocapture",
             "--test-threads",
             "1",
-            "tests::test_pav_serv::" + name,
+            "tests::pav_serv::" + name,
         ]
     )
