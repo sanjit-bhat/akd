@@ -567,10 +567,12 @@ async fn bench_audit_batch() {
     let n_warm = get_warmup(n_ops);
     let n_insert = 1_000;
 
-    let mut total: Duration = Default::default();
+    let mut total_gen: Duration = Default::default();
+    let mut total_ver: Duration = Default::default();
     for i in 0..n_warm + n_ops {
         if i == n_warm {
-            total = Default::default();
+            total_gen = Default::default();
+            total_ver = Default::default();
         }
         let start_dig = serv.get_epoch_hash().await.unwrap();
         let new_els: Vec<(AkdLabel, AkdValue)> = (0..n_insert)
@@ -578,30 +580,45 @@ async fn bench_audit_batch() {
             .collect();
         let end_dig = serv.publish(new_els).await.unwrap();
 
-        let s = Instant::now();
+        let s0 = Instant::now();
         let p = serv
             .audit(start_dig.epoch(), end_dig.epoch())
             .await
             .unwrap();
+
+        let s1 = Instant::now();
         aud.audit(vec![start_dig.hash(), end_dig.hash()], p)
             .await
             .unwrap();
-        total += s.elapsed();
+        let e = Instant::now();
+
+        total_gen += s1 - s0;
+        total_ver += e - s1;
     }
 
-    let m0 = total.as_micros() as f64 / n_ops as f64;
-    let m1 = total.as_millis() as f64;
+    let m0 = total_gen.as_micros() as f64 / n_ops as f64;
+    let m1 = total_gen.as_millis() as f64;
+    let m2 = total_ver.as_micros() as f64 / n_ops as f64;
+    let m3 = total_ver.as_millis() as f64;
     report(
         "bench_audit_batch".into(),
         n_ops,
         &[
             &Metric {
                 n: m0,
-                unit: "us/op".into(),
+                unit: "us/op(gen)".into(),
             },
             &Metric {
                 n: m1,
-                unit: "total(ms)".into(),
+                unit: "total(ms,gen)".into(),
+            },
+            &Metric {
+                n: m2,
+                unit: "us/op(ver)".into(),
+            },
+            &Metric {
+                n: m3,
+                unit: "total(ms,ver)".into(),
             },
         ],
     );
