@@ -1,6 +1,6 @@
 cargo test --profile benchtest -F benchtest -p akd --no-run
 samply record ./target/benchtest/deps/akd-6a3041934f2798a8 --test-threads 1 --show-output bench
 samply load profile.json.gz
-cargo test --profile benchtest -F benchtest -p akd -- --nocapture tests::test_pav_serv::bench_serv_put_batch
+cargo test --profile benchtest -F benchtest -p akd -- --nocapture tests::pav_serv::bench_serv_put_batch
 
 cargo flamegraph --profile benchtest --features benchtest --package akd --unit-test -- tests::test_pav_crypto::bench_hash
