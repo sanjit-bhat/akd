@@ -644,6 +644,7 @@ async fn bench_serv_scale() {
     let n_measure = 500_000;
     let n_ops = 10_000;
     let n_warm = get_warmup(n_ops);
+    let n_rem = n_measure as i32 - n_warm - n_ops;
 
     let mut sys_info = sysinfo::System::new();
     let pid = sysinfo::get_current_pid().unwrap();
@@ -668,7 +669,6 @@ async fn bench_serv_scale() {
         }
         let total = start.elapsed();
 
-        let n_rem = n_measure as i32 - n_warm - n_ops;
         let rem: Vec<(AkdLabel, AkdValue)> = (0..n_rem)
             .map(|_| (mk_rand_label(), mk_rand_val()))
             .collect();
