@@ -19,13 +19,9 @@ if bench_class == "serv":
         "bench_audit_batch",
         "bench_audit_size",
     ]
-elif bench_class == "scale_time":
+elif bench_class == "serv_scale":
     bench_tests = [
-        "bench_scale_time",
-    ]
-elif bench_class == "scale_alloc":
-    bench_tests = [
-        "bench_scale_alloc",
+        "bench_serv_scale",
     ]
 elif bench_class == "one":
     bench_tests = [
@@ -70,6 +66,8 @@ for name in bench_tests:
             "akd",
             "--",
             "--nocapture",
+            "--test-threads",
+            "1",
             "tests::test_pav_serv::" + name,
         ]
     )

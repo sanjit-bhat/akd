@@ -633,14 +633,14 @@ async fn bench_audit_size() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn bench_scale_alloc() {
+async fn bench_serv_scale() {
     let db = AsyncInMemoryDatabase::new();
     let store = StorageManager::new_no_cache(db);
     let vrf = VRF {};
     let serv = Directory::<TC, _, _>::new(store, vrf, PAR_CFG)
         .await
         .unwrap();
-    let n_insert = 236_500_000;
+    let n_insert = 500_000_000;
     let n_measure = 500_000;
 
     let mut sys_info = sysinfo::System::new();
@@ -649,20 +649,42 @@ async fn bench_scale_alloc() {
     sys_info.refresh_memory();
 
     for i in (0..n_insert).step_by(n_measure) {
-        let new_els: Vec<(AkdLabel, AkdValue)> = (0..n_measure)
-            .map(|_| (mk_rand_label(), mk_rand_val()))
-            .collect();
-        serv.publish(new_els).await.unwrap();
-
         sys_info.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[pid]), true);
         sys_info.refresh_memory();
 
+        let n_ops = 10_000;
+        let n_warm = get_warmup(n_ops);
+        let mut start = Instant::now();
+        for j in 0..n_warm + n_ops {
+            if j == n_warm {
+                start = Instant::now();
+            }
+            let l = mk_rand_label();
+            let elem = vec![(l.clone(), mk_rand_val())];
+            serv.publish(elem).await.unwrap();
+            serv.key_history(&l, HistoryParams::MostRecent(1))
+                .await
+                .unwrap();
+        }
+        let total = start.elapsed();
+
+        let n_rem = n_measure as i32 - n_warm - n_ops;
+        let rem: Vec<(AkdLabel, AkdValue)> = (0..n_rem)
+            .map(|_| (mk_rand_label(), mk_rand_val()))
+            .collect();
+        serv.publish(rem).await.unwrap();
+
+        let lat = total.as_micros() as f64 / n_ops as f64;
         let mb0 = sys_info.process(pid).unwrap().memory() as f64 / 1_000_000.0;
         let mb1 = sys_info.used_memory() as f64 / 1_000_000.0;
         report(
-            "bench_scale_alloc".into(),
-            (i + n_measure) as i32,
+            "bench_serv_scale".into(),
+            i as i32,
             &[
+                &Metric {
+                    n: lat,
+                    unit: "us/op".into(),
+                },
                 &Metric {
                     n: mb0,
                     unit: "MB(proc)".into(),
@@ -673,56 +695,6 @@ async fn bench_scale_alloc() {
                 },
             ],
         );
-    }
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn bench_scale_time() {
-    let db = AsyncInMemoryDatabase::new();
-    let store = StorageManager::new_no_cache(db);
-    let vrf = VRF {};
-    let serv = Arc::new(
-        Directory::<TC, _, _>::new(store, vrf, PAR_CFG)
-            .await
-            .unwrap(),
-    );
-    let n_insert = 236_500_000;
-    let n_measure = 500_000;
-    // TODO: see if this actually the best batch size.
-    let batch_sz = 1_000;
-
-    for i in (0..n_insert).step_by(n_measure) {
-        let (total, n_batches) = put_batch_helper(&serv, batch_sz).await;
-        let tput = (n_batches * batch_sz) as f64 / total.as_secs_f64();
-        let lat = total.as_micros() as f64 / n_batches as f64;
-        let overall = total.as_millis() as f64;
-        report(
-            "bench_scale_time".into(),
-            i,
-            &[
-                &Metric {
-                    n: tput,
-                    unit: "op/s".into(),
-                },
-                &Metric {
-                    n: lat,
-                    unit: "us/batch".into(),
-                },
-                &Metric {
-                    n: overall,
-                    unit: "total(ms)".into(),
-                },
-            ],
-        );
-
-        let added = (n_batches + get_warmup(n_batches)) * batch_sz;
-        if added > n_measure as i32 {
-            panic!("put scaling inserted too many elems");
-        }
-        let rem: Vec<(AkdLabel, AkdValue)> = (0..(n_measure as i32 - added))
-            .map(|_| (mk_rand_label(), mk_rand_val()))
-            .collect();
-        serv.publish(rem).await.unwrap();
     }
 }
 
