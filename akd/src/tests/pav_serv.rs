@@ -76,7 +76,9 @@ async fn bench_put_one() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_put_batch() {
-    for batch_sz in [1, 2, 5, 10, 20, 50, 100, 200, 500, 1_000, 2_000, 5_000] {
+    for batch_sz in [
+        1, 2, 5, 10, 20, 50, 100, 200, 500, 1_000, 2_000, 5_000, 10_000, 20_000, 50_000, 100_000,
+    ] {
         let (serv, _labels, _) = seed_server(DEF_NSEED).await;
         let (total, n_batches) = put_batch_helper(&serv, batch_sz).await;
 
