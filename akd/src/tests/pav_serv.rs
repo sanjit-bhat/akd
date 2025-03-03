@@ -642,6 +642,8 @@ async fn bench_serv_scale() {
         .unwrap();
     let n_insert = 500_000_000;
     let n_measure = 500_000;
+    let n_ops = 10_000;
+    let n_warm = get_warmup(n_ops);
 
     let mut sys_info = sysinfo::System::new();
     let pid = sysinfo::get_current_pid().unwrap();
@@ -652,8 +654,6 @@ async fn bench_serv_scale() {
         sys_info.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[pid]), true);
         sys_info.refresh_memory();
 
-        let n_ops = 10_000;
-        let n_warm = get_warmup(n_ops);
         let mut start = Instant::now();
         for j in 0..n_warm + n_ops {
             if j == n_warm {
