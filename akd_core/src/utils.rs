@@ -96,15 +96,13 @@ fn get_bit_length(input: u64) -> u64 {
 /// Note that the past marker versions do not contain start_version, as this would be redundant
 /// in the history proof (since membership is already checked for start_version).
 pub fn get_marker_versions(
-    _start_version: u64,
+    start_version: u64,
     end_version: u64,
     epoch: u64,
 ) -> (PastMarkerVersions, FutureMarkerVersions) {
     // Compute past marker versions
-    let past_marker_versions: Vec<u64> = Vec::new();
+    let mut past_marker_versions: Vec<u64> = Vec::new();
 
-    // change: stateful clients don't need past markers.
-    /*
     let skiplist_past_index: usize = find_max_index_in_skiplist(start_version);
     if MARKER_VERSION_SKIPLIST[skiplist_past_index] != start_version {
         past_marker_versions.push(MARKER_VERSION_SKIPLIST[skiplist_past_index]);
@@ -132,7 +130,6 @@ pub fn get_marker_versions(
             }
         }
     }
-    */
 
     // Compute future marker versions
     let mut future_marker_versions: Vec<u64> = Vec::new();

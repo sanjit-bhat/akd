@@ -527,8 +527,10 @@ where
             )));
         }
 
-        let (past_marker_versions, future_marker_versions) =
+        let (mut past_marker_versions, future_marker_versions) =
             get_marker_versions(start_version, end_version, current_epoch);
+        // change: stateful clients don't need past markers.
+        past_marker_versions.clear();
 
         #[cfg(feature = "preload_history")]
         {
@@ -954,7 +956,7 @@ where
 
 /// Helpers
 
-pub(crate) fn get_marker_version(version: u64) -> u64 {
+pub fn get_marker_version(version: u64) -> u64 {
     (64 - version.leading_zeros() - 1).into()
 }
 

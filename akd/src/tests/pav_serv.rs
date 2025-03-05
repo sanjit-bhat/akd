@@ -1,4 +1,6 @@
+use akd::directory::get_marker_version;
 use akd::storage::memory::AsyncInMemoryDatabase as DB;
+use akd_core::utils::get_marker_versions;
 use rand::RngCore;
 use std::future::Future;
 use std::sync::Arc;
@@ -35,6 +37,37 @@ const PAR_CFG: AzksParallelismConfig = AzksParallelismConfig {
     preload: AzksParallelismOption::Disabled,
 };
 const NS_PER_US: f64 = 1_000.0;
+
+#[test]
+fn test_print_markers() {
+    for ver in 1..=40 {
+        let (past, future) = get_marker_versions(ver, ver, 500_000);
+        println!("{}: {:?}-{:?}", ver, past, future);
+    }
+}
+
+#[test]
+fn test_marker_attack() {
+    let max_scan = 50;
+    for put_ver in 1..=max_scan {
+        let (_, put_fut_markers) = get_marker_versions(put_ver, put_ver, 500_000);
+        for get_ver in put_ver + 1..put_ver + 1 + max_scan {
+            if put_fut_markers.contains(&get_ver) {
+                continue;
+            }
+            let get_past_marker = 1 << get_marker_version(get_ver);
+            if put_fut_markers.contains(&get_past_marker) {
+                continue;
+            }
+            println!(
+                "put: {}, {:?}; get: {}, {}",
+                put_ver, put_fut_markers, get_ver, get_past_marker
+            );
+            // NOTE: lot more get_ver's that satisfy, but skip those for now.
+            break;
+        }
+    }
+}
 
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_put_one() {
@@ -660,7 +693,7 @@ async fn bench_serv_scale() {
         .await
         .unwrap();
     let n_insert = 500_000_000;
-    let n_measure = 500_000;
+    let n_measure = 1_000_000;
     let n_ops = 10_000;
     let n_warm = get_warmup(n_ops);
     let n_rem = n_measure as i32 - n_warm - n_ops;

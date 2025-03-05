@@ -171,8 +171,10 @@ fn verify_with_history_params(
         }
     }
 
-    let (past_marker_versions, future_marker_versions) =
+    let (mut past_marker_versions, future_marker_versions) =
         crate::utils::get_marker_versions(start_version, end_version, current_epoch);
+    // change: stateful clients don't need past markers.
+    past_marker_versions.clear();
 
     // Perform checks for expected number of past marker proofs
     if past_marker_versions.len() != proof.past_marker_vrf_proofs.len() {
