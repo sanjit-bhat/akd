@@ -49,10 +49,11 @@ fn test_print_markers() {
 #[test]
 fn test_marker_attack() {
     let max_scan = 50;
+    let n_epochs = 500_000;
     for put_ver in 1..=max_scan {
         // called when a user Alice SelfMon's her own key, at put_ver.
         // for actual call, see directory::key_history.
-        let (_, put_fut_markers) = get_marker_versions(put_ver, put_ver, 500_000);
+        let (_, put_fut_markers) = get_marker_versions(put_ver, put_ver, n_epochs);
         for get_ver in put_ver + 1..put_ver + 1 + max_scan {
             if put_fut_markers.contains(&get_ver) {
                 continue;
