@@ -50,11 +50,17 @@ fn test_print_markers() {
 fn test_marker_attack() {
     let max_scan = 50;
     for put_ver in 1..=max_scan {
+        // called when a user Alice SelfMon's her own key, at put_ver.
+        // for actual call, see directory::key_history.
         let (_, put_fut_markers) = get_marker_versions(put_ver, put_ver, 500_000);
         for get_ver in put_ver + 1..put_ver + 1 + max_scan {
             if put_fut_markers.contains(&get_ver) {
                 continue;
             }
+            // called when a different user Get's Alice's key,
+            // and the server tries to lie and say it's at get_ver.
+            // for actual call, see directory::build_lookup_info,
+            // called from directory::lookup.
             let get_past_marker = 1 << get_marker_version(get_ver);
             if put_fut_markers.contains(&get_past_marker) {
                 continue;
@@ -63,7 +69,8 @@ fn test_marker_attack() {
                 "put: {}, {:?}; get: {}, {}",
                 put_ver, put_fut_markers, get_ver, get_past_marker
             );
-            // NOTE: lot more get_ver's that satisfy, but skip those for now.
+            // NOTE: lot more get_ver's that satisfy,
+            // but skip those for presentation.
             break;
         }
     }
