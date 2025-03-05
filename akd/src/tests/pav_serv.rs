@@ -40,7 +40,7 @@ const NS_PER_US: f64 = 1_000.0;
 
 #[test]
 fn test_print_markers() {
-    for ver in 1..=40 {
+    for ver in 1..=50 {
         let (past, future) = get_marker_versions(ver, ver, 500_000);
         println!("{}: {:?}-{:?}", ver, past, future);
     }
@@ -75,6 +75,53 @@ fn test_marker_attack() {
             break;
         }
     }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_marker_poc() {
+    // get enough epochs to activate a big skiplist.
+    let (serv, _, mut aud) = seed_server(65_537).await;
+    let start_dig = serv.get_epoch_hash().await.unwrap();
+    let vrf_pk = serv.get_public_key().await.unwrap();
+
+    // generate Put and Get proofs, both against the same dig.
+    let (end_dig, uid, hist_proof, lookup_proof) = serv.marker_attack().await;
+
+    // Audit, just to make sure that passes as well.
+    let aud_proof = serv
+        .audit(start_dig.epoch(), end_dig.epoch())
+        .await
+        .unwrap();
+    aud.audit(vec![start_dig.hash(), end_dig.hash()], aud_proof)
+        .await
+        .unwrap();
+
+    key_history_verify::<TC>(
+        vrf_pk.as_bytes(),
+        end_dig.hash(),
+        end_dig.epoch(),
+        uid.clone(),
+        hist_proof.clone(),
+        HistoryVerificationParams::Default {
+            history_params: HistoryParams::MostRecent(1),
+        },
+        None,
+    )
+    .unwrap();
+
+    lookup_verify::<TC>(
+        vrf_pk.as_bytes(),
+        end_dig.hash(),
+        end_dig.epoch(),
+        uid.clone(),
+        lookup_proof.clone(),
+    )
+    .unwrap();
+
+    // it should not be possible to make these contradictory proofs.
+    assert!(&hist_proof.update_proofs[0].version != &lookup_proof.version);
+    assert!(&hist_proof.update_proofs[0].value != &lookup_proof.value);
+    println!("poc success!");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -774,7 +821,7 @@ pub async fn seed_server(
     // but 65_536 is the biggest future marker version less than that.
     // see get_marker_versions.
     let n_ep = 65_536;
-    if n_seed < n_ep {
+    if n_seed <= n_ep {
         panic!("n_seed too small");
     }
     for i in 0..n_ep {

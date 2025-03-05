@@ -1151,3 +1151,186 @@ impl<TC: Configuration, S: Database + 'static, V: VRFKeyStorage> Directory<TC, S
         // want to change this to call a write operation to post to a blockchain or some such thing
     }
 }
+
+impl<TC: Configuration, S: Database + 'static, V: VRFKeyStorage> Directory<TC, S, V> {
+    // this attack simulates a malicious server giving a HistoryProof
+    // for version 1 of a uid and a LookupProof for version 8 of the same uid,
+    // both against the exact same epoch.
+    pub async fn marker_attack(&self) -> (EpochHash, AkdLabel, HistoryProof, LookupProof) {
+        let uid = mk_rand_label();
+        let good_pk = mk_rand_val();
+        let bad_pk = mk_rand_val();
+        let mut current_azks = self.retrieve_azks().await.unwrap();
+        let commitment_key = self.derive_commitment_key().await.unwrap();
+        let next_ep = current_azks.get_latest_epoch() + 1;
+        let mut update_set = Vec::<AzksElement>::new();
+        let mut user_data_update_set = Vec::<ValueState>::new();
+
+        let good_label = self
+            .vrf
+            .get_node_label::<TC>(&uid, VersionFreshness::Fresh, 1)
+            .await
+            .unwrap();
+        let good_val = TC::compute_fresh_azks_value(&commitment_key, &good_label, 1, &good_pk);
+        update_set.push(AzksElement {
+            label: good_label,
+            value: good_val,
+        });
+        user_data_update_set.push(ValueState::new(
+            uid.clone(),
+            good_pk.clone(),
+            1,
+            good_label,
+            next_ep,
+        ));
+
+        let bad_label = self
+            .vrf
+            .get_node_label::<TC>(&uid, VersionFreshness::Fresh, 8)
+            .await
+            .unwrap();
+        let bad_val = TC::compute_fresh_azks_value(&commitment_key, &bad_label, 8, &bad_pk);
+        update_set.push(AzksElement {
+            label: bad_label,
+            value: bad_val,
+        });
+        user_data_update_set.push(ValueState::new(
+            uid.clone(),
+            bad_pk.clone(),
+            8,
+            bad_label,
+            next_ep,
+        ));
+
+        if !self.storage.begin_transaction() {
+            panic!("bad txn");
+        }
+        current_azks
+            .batch_insert_nodes::<TC, _>(
+                &self.storage,
+                update_set.to_vec(),
+                InsertMode::Directory,
+                self.parallelism_config,
+            )
+            .await
+            .unwrap();
+        let mut updates = vec![DbRecord::Azks(current_azks.clone())];
+        for update in user_data_update_set.into_iter() {
+            updates.push(DbRecord::ValueState(update));
+        }
+        self.storage.batch_set(updates).await.unwrap();
+        self.storage.commit_transaction().await.unwrap();
+
+        let ep_hash = self.get_epoch_hash().await.unwrap();
+
+        let update_vrf_proof = self
+            .vrf
+            .get_label_proof::<TC>(&uid, VersionFreshness::Fresh, 1)
+            .await
+            .unwrap()
+            .to_bytes()
+            .to_vec();
+        let update_merkle_proof = current_azks
+            .get_membership_proof::<TC, _>(&self.storage, good_label)
+            .await
+            .unwrap();
+        let put_commit_nonce =
+            TC::get_commitment_nonce(&commitment_key, &good_label, 1, &good_pk).to_vec();
+        let update_proof = UpdateProof {
+            epoch: ep_hash.epoch(),
+            value: good_pk,
+            version: 1,
+            existence_vrf_proof: update_vrf_proof,
+            existence_proof: update_merkle_proof,
+            previous_version_vrf_proof: None,
+            previous_version_proof: None,
+            commitment_nonce: put_commit_nonce,
+        };
+
+        let mut put_marker_vrf_proofs = vec![];
+        let mut put_marker_merkle_proofs = vec![];
+        let put_marker_vers = vec![2, 4, 16, 256, 65536];
+        for ver in put_marker_vers {
+            let node_label = self
+                .vrf
+                .get_node_label::<TC>(&uid, VersionFreshness::Fresh, ver)
+                .await
+                .unwrap();
+            put_marker_vrf_proofs.push(
+                self.vrf
+                    .get_label_proof::<TC>(&uid, VersionFreshness::Fresh, ver)
+                    .await
+                    .unwrap()
+                    .to_bytes()
+                    .to_vec(),
+            );
+            put_marker_merkle_proofs.push(
+                current_azks
+                    .get_non_membership_proof::<TC, _>(&self.storage, node_label)
+                    .await
+                    .unwrap(),
+            );
+        }
+        let hist_proof = HistoryProof {
+            update_proofs: vec![update_proof],
+            past_marker_vrf_proofs: vec![],
+            existence_of_past_marker_proofs: vec![],
+            future_marker_vrf_proofs: put_marker_vrf_proofs,
+            non_existence_of_future_marker_proofs: put_marker_merkle_proofs,
+        };
+
+        let get_vrf_proof = self
+            .vrf
+            .get_label_proof::<TC>(&uid, VersionFreshness::Fresh, 8)
+            .await
+            .unwrap()
+            .to_bytes()
+            .to_vec();
+        let get_merkle_proof = current_azks
+            .get_membership_proof::<TC, _>(&self.storage, bad_label)
+            .await
+            .unwrap();
+        let get_freshness_vrf_proof = self
+            .vrf
+            .get_label_proof::<TC>(&uid, VersionFreshness::Stale, 8)
+            .await
+            .unwrap();
+        let get_freshness_label = self
+            .vrf
+            .get_node_label_from_vrf_proof(get_freshness_vrf_proof)
+            .await;
+        let get_freshness_merkle_proof = current_azks
+            .get_non_membership_proof::<TC, _>(&self.storage, get_freshness_label)
+            .await
+            .unwrap();
+        let get_commit_nonce =
+            TC::get_commitment_nonce(&commitment_key, &bad_label, 8, &bad_pk).to_vec();
+        let lookup_proof = LookupProof {
+            epoch: ep_hash.epoch(),
+            value: bad_pk,
+            version: 8,
+            existence_vrf_proof: get_vrf_proof.clone(),
+            existence_proof: get_merkle_proof.clone(),
+            marker_vrf_proof: get_vrf_proof.clone(),
+            marker_proof: get_merkle_proof.clone(),
+            freshness_vrf_proof: get_freshness_vrf_proof.to_bytes().to_vec(),
+            freshness_proof: get_freshness_merkle_proof,
+            commitment_nonce: get_commit_nonce,
+        };
+        (ep_hash, uid, hist_proof, lookup_proof)
+    }
+}
+
+pub fn mk_rand_label() -> AkdLabel {
+    // 8 bytes to match pav uint64 uid.
+    let mut bytes = vec![0u8; 8];
+    rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut bytes);
+    AkdLabel(bytes)
+}
+
+pub fn mk_rand_val() -> AkdValue {
+    // 32 bytes for ed25519 pk.
+    let mut v = vec![0; 32];
+    rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut v);
+    AkdValue(v)
+}
