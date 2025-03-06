@@ -138,38 +138,71 @@ async fn test_marker_poc() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn bench_put_one() {
-    let (serv, _labels, _) = seed_server(DEF_NSEED).await;
-    let n_ops = 10_000;
+async fn bench_put_genver() {
+    let (serv, _, _) = seed_server(DEF_NSEED).await;
+    let vrf_pk = serv.get_public_key().await.unwrap();
+    let n_ops = 50_000;
     let n_warm = get_warmup(n_ops);
 
-    let mut start = Instant::now();
+    let mut total_gen: Duration = Default::default();
+    let mut total_ver: Duration = Default::default();
     for i in 0..n_warm + n_ops {
         if i == n_warm {
-            start = Instant::now();
+            total_gen = Default::default();
+            total_ver = Default::default();
         }
         let l = mk_rand_label();
         let elem = vec![(l.clone(), mk_rand_val())];
+
+        let t0 = Instant::now();
         serv.publish(elem).await.unwrap();
-        serv.key_history(&l, HistoryParams::MostRecent(1))
+        let (p, dig) = serv
+            .key_history(&l, HistoryParams::MostRecent(1))
             .await
             .unwrap();
-    }
-    let total = start.elapsed();
 
-    let m0 = total.as_micros() as f64 / n_ops as f64;
-    let m1 = total.as_millis() as f64;
+        let t1 = Instant::now();
+        key_history_verify::<TC>(
+            vrf_pk.as_bytes(),
+            dig.hash(),
+            dig.epoch(),
+            l.clone(),
+            p,
+            HistoryVerificationParams::Default {
+                history_params: HistoryParams::MostRecent(1),
+            },
+            None,
+        )
+        .unwrap();
+        let t2 = Instant::now();
+
+        total_gen += t1 - t0;
+        total_ver += t2 - t1;
+    }
+
+    let m0 = total_gen.as_micros() as f64 / n_ops as f64;
+    let m1 = total_gen.as_millis() as f64;
+    let m2 = total_ver.as_micros() as f64 / n_ops as f64;
+    let m3 = total_ver.as_millis() as f64;
     report(
-        "bench_put_one".into(),
+        "bench_put_genver".into(),
         n_ops,
         &[
             &Metric {
                 n: m0,
-                unit: "us/op".into(),
+                unit: "us/op(gen)".into(),
             },
             &Metric {
                 n: m1,
-                unit: "total(ms)".into(),
+                unit: "total(ms,gen)".into(),
+            },
+            &Metric {
+                n: m2,
+                unit: "us/op(ver)".into(),
+            },
+            &Metric {
+                n: m3,
+                unit: "total(ms,ver)".into(),
             },
         ],
     );
@@ -240,58 +273,6 @@ async fn put_batch_helper(serv: &Arc<Directory<TC, DB, VRF>>, batch_sz: i32) -> 
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn bench_put_verify() {
-    let (serv, labels, _) = seed_server(DEF_NSEED).await;
-    let vrf_pk = serv.get_public_key().await.unwrap();
-    let n_ops = 10_000;
-    let n_warm = get_warmup(n_ops);
-
-    let mut total: Duration = Default::default();
-    for i in 0..n_warm + n_ops {
-        if i == n_warm {
-            total = Default::default();
-        }
-        let l = labels.iter().choose(&mut rand::thread_rng()).unwrap();
-        let (p, dig) = serv
-            .key_history(l, HistoryParams::MostRecent(1))
-            .await
-            .unwrap();
-
-        let s = Instant::now();
-        key_history_verify::<TC>(
-            vrf_pk.as_bytes(),
-            dig.hash(),
-            dig.epoch(),
-            l.clone(),
-            p,
-            HistoryVerificationParams::Default {
-                history_params: HistoryParams::MostRecent(1),
-            },
-            None,
-        )
-        .unwrap();
-        total += s.elapsed();
-    }
-
-    let m0 = total.as_micros() as f64 / n_ops as f64;
-    let m1 = total.as_millis() as f64;
-    report(
-        "bench_put_verify".into(),
-        n_ops,
-        &[
-            &Metric {
-                n: m0,
-                unit: "us/op".into(),
-            },
-            &Metric {
-                n: m1,
-                unit: "total(ms)".into(),
-            },
-        ],
-    );
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn bench_put_size() {
     let (serv, labels, _) = seed_server(DEF_NSEED).await;
     let l = &labels[0];
@@ -313,34 +294,59 @@ async fn bench_put_size() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn bench_get_one() {
+async fn bench_get_genver() {
     let (serv, labels, _) = seed_server(DEF_NSEED).await;
-    let n_ops = 10_000;
+    let vrf_pk = serv.get_public_key().await.unwrap().to_bytes();
+    let n_ops = 50_000;
     let n_warm = get_warmup(n_ops);
+    let mut total_gen: Duration = Default::default();
+    let mut total_ver: Duration = Default::default();
 
-    let mut start = Instant::now();
     for i in 0..n_warm + n_ops {
         if i == n_warm {
-            start = Instant::now();
+            total_gen = Default::default();
+            total_ver = Default::default();
         }
-        let l = labels.iter().choose(&mut rand::thread_rng()).unwrap();
-        serv.lookup(l.clone()).await.unwrap();
-    }
-    let total = start.elapsed();
 
-    let m0 = total.as_micros() as f64 / n_ops as f64;
-    let m1 = total.as_millis() as f64;
+        let l = labels.iter().choose(&mut rand::thread_rng()).unwrap();
+
+        let t0 = Instant::now();
+        let (p, dig) = serv.lookup(l.clone()).await.unwrap();
+        if p.version as i32 != 1 {
+            panic!("wrong version");
+        }
+
+        let t1 = Instant::now();
+        lookup_verify::<TC>(&vrf_pk, dig.hash(), dig.epoch(), l.clone(), p).unwrap();
+        let t2 = Instant::now();
+
+        total_gen += t1 - t0;
+        total_ver += t2 - t1;
+    }
+
+    let m0 = total_gen.as_micros() as f64 / n_ops as f64;
+    let m1 = total_gen.as_millis() as f64;
+    let m2 = total_ver.as_micros() as f64 / n_ops as f64;
+    let m3 = total_ver.as_millis() as f64;
     report(
-        "bench_get_one".into(),
+        "bench_get_genver".into(),
         n_ops,
         &[
             &Metric {
                 n: m0,
-                unit: "us/op".into(),
+                unit: "us/op(gen)".into(),
             },
             &Metric {
                 n: m1,
-                unit: "total(ms)".into(),
+                unit: "total(ms,gen)".into(),
+            },
+            &Metric {
+                n: m2,
+                unit: "us/op(ver)".into(),
+            },
+            &Metric {
+                n: m3,
+                unit: "total(ms,ver)".into(),
             },
         ],
     );
@@ -427,107 +433,70 @@ async fn bench_get_size() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn bench_get_verify() {
-    let max_n_vers = 10;
-    for n_vers in 1..=max_n_vers {
-        let (n_ops, total_gen, total_verify) = get_verify_helper(n_vers).await;
-
-        let m0 = total_gen.as_micros() as f64 / n_ops as f64;
-        let m1 = total_gen.as_millis() as f64;
-        let m2 = total_verify.as_micros() as f64 / n_ops as f64;
-        let m3 = total_verify.as_millis() as f64;
-
-        report(
-            "bench_get_verify".into(),
-            n_vers,
-            &[
-                &Metric {
-                    n: m0,
-                    unit: "us/op(gen)".into(),
-                },
-                &Metric {
-                    n: m1,
-                    unit: "total(ms,gen)".into(),
-                },
-                &Metric {
-                    n: m2,
-                    unit: "us/op(ver)".into(),
-                },
-                &Metric {
-                    n: m3,
-                    unit: "total(ms,ver)".into(),
-                },
-            ],
-        );
-    }
-}
-
-async fn get_verify_helper(n_vers: i32) -> (i32, Duration, Duration) {
-    let (serv, _, _) = seed_server(DEF_NSEED).await;
+async fn bench_selfmon_genver() {
+    let (serv, labels, _) = seed_server(DEF_NSEED).await;
     let vrf_pk = serv.get_public_key().await.unwrap().to_bytes();
-    let n_ops = 10_000;
+    let n_ops = 50_000;
     let n_warm = get_warmup(n_ops);
     let mut total_gen: Duration = Default::default();
-    let mut total_verify: Duration = Default::default();
+    let mut total_ver: Duration = Default::default();
 
     for i in 0..n_warm + n_ops {
         if i == n_warm {
             total_gen = Default::default();
-            total_verify = Default::default();
+            total_ver = Default::default();
         }
 
-        let l = mk_rand_label();
-        for _ in 0..n_vers {
-            let elem = vec![(l.clone(), mk_rand_val())];
-            serv.publish(elem.clone()).await.unwrap();
-        }
-
-        let s0 = Instant::now();
-        let (p, dig) = serv.lookup(l.clone()).await.unwrap();
-        total_gen += s0.elapsed();
-
-        if p.version as i32 != n_vers {
-            panic!("wrong version");
-        }
-
-        let s1 = Instant::now();
-        lookup_verify::<TC>(&vrf_pk, dig.hash(), dig.epoch(), l.clone(), p).unwrap();
-        total_verify += s1.elapsed();
-    }
-    (n_ops, total_gen, total_verify)
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn bench_selfmon_one() {
-    let (serv, labels, _) = seed_server(DEF_NSEED).await;
-    let n_ops = 20_000;
-    let n_warm = get_warmup(n_ops);
-
-    let mut start = Instant::now();
-    for i in 0..n_warm + n_ops {
-        if i == n_warm {
-            start = Instant::now();
-        }
         let l = labels.iter().choose(&mut rand::thread_rng()).unwrap();
-        serv.key_history(&l, HistoryParams::MostRecent(0))
+
+        let t0 = Instant::now();
+        let (p, dig) = serv
+            .key_history(&l, HistoryParams::MostRecent(0))
             .await
             .unwrap();
-    }
-    let total = start.elapsed();
 
-    let m0 = total.as_micros() as f64 / n_ops as f64;
-    let m1 = total.as_millis() as f64;
+        let t1 = Instant::now();
+        key_history_verify::<TC>(
+            &vrf_pk,
+            dig.hash(),
+            dig.epoch(),
+            l.clone(),
+            p,
+            HistoryVerificationParams::Default {
+                history_params: HistoryParams::MostRecent(0),
+            },
+            Some(1),
+        )
+        .unwrap();
+        let t2 = Instant::now();
+
+        total_gen += t1 - t0;
+        total_ver += t2 - t1;
+    }
+
+    let m0 = total_gen.as_micros() as f64 / n_ops as f64;
+    let m1 = total_gen.as_millis() as f64;
+    let m2 = total_ver.as_micros() as f64 / n_ops as f64;
+    let m3 = total_ver.as_millis() as f64;
     report(
-        "bench_selfmon_one".into(),
+        "bench_selfmon_genver".into(),
         n_ops,
         &[
             &Metric {
                 n: m0,
-                unit: "us/op".into(),
+                unit: "us/op(gen)".into(),
             },
             &Metric {
                 n: m1,
-                unit: "total(ms)".into(),
+                unit: "total(ms,gen)".into(),
+            },
+            &Metric {
+                n: m2,
+                unit: "us/op(ver)".into(),
+            },
+            &Metric {
+                n: m3,
+                unit: "total(ms,ver)".into(),
             },
         ],
     );
@@ -610,59 +579,7 @@ async fn bench_selfmon_size() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn bench_selfmon_verify() {
-    let (serv, labels, _) = seed_server(DEF_NSEED).await;
-    let vrf_pk = serv.get_public_key().await.unwrap().to_bytes();
-    let n_ops = 20_000;
-    let n_warm = get_warmup(n_ops);
-
-    let mut total: Duration = Default::default();
-    for i in 0..n_warm + n_ops {
-        if i == n_warm {
-            total = Default::default();
-        }
-        let l = labels.iter().choose(&mut rand::thread_rng()).unwrap();
-        let (p, dig) = serv
-            .key_history(&l, HistoryParams::MostRecent(0))
-            .await
-            .unwrap();
-
-        let s = Instant::now();
-        key_history_verify::<TC>(
-            &vrf_pk,
-            dig.hash(),
-            dig.epoch(),
-            l.clone(),
-            p,
-            HistoryVerificationParams::Default {
-                history_params: HistoryParams::MostRecent(0),
-            },
-            Some(1),
-        )
-        .unwrap();
-        total += s.elapsed();
-    }
-
-    let m0 = total.as_micros() as f64 / n_ops as f64;
-    let m1 = total.as_millis() as f64;
-    report(
-        "bench_selfmon_verify".into(),
-        n_ops,
-        &[
-            &Metric {
-                n: m0,
-                unit: "us/op".into(),
-            },
-            &Metric {
-                n: m1,
-                unit: "total(ms)".into(),
-            },
-        ],
-    );
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn bench_audit_batch() {
+async fn bench_audit_genver() {
     let (serv, _, mut aud) = seed_server(DEF_NSEED).await;
     let n_ops = 300;
     let n_warm = get_warmup(n_ops);
@@ -681,20 +598,20 @@ async fn bench_audit_batch() {
             .collect();
         let end_dig = serv.publish(new_els).await.unwrap();
 
-        let s0 = Instant::now();
+        let t0 = Instant::now();
         let p = serv
             .audit(start_dig.epoch(), end_dig.epoch())
             .await
             .unwrap();
 
-        let s1 = Instant::now();
+        let t1 = Instant::now();
         aud.audit(vec![start_dig.hash(), end_dig.hash()], p)
             .await
             .unwrap();
-        let e = Instant::now();
+        let t2 = Instant::now();
 
-        total_gen += s1 - s0;
-        total_ver += e - s1;
+        total_gen += t1 - t0;
+        total_ver += t2 - t1;
     }
 
     let m0 = total_gen.as_micros() as f64 / n_ops as f64;
