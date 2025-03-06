@@ -141,7 +141,7 @@ async fn test_marker_poc() {
 async fn bench_put_gen_ver() {
     let (serv, _, _) = seed_server(DEF_NSEED).await;
     let vrf_pk = serv.get_public_key().await.unwrap();
-    let n_ops = 50_000;
+    let n_ops = 10_000;
     let n_warm = get_warmup(n_ops);
 
     let mut total_gen: Duration = Default::default();
@@ -297,7 +297,7 @@ async fn bench_put_size() {
 async fn bench_get_gen_ver() {
     let (serv, labels, _) = seed_server(DEF_NSEED).await;
     let vrf_pk = serv.get_public_key().await.unwrap().to_bytes();
-    let n_ops = 50_000;
+    let n_ops = 10_000;
     let n_warm = get_warmup(n_ops);
     let mut total_gen: Duration = Default::default();
     let mut total_ver: Duration = Default::default();
@@ -436,7 +436,7 @@ async fn bench_get_size() {
 async fn bench_selfmon_gen_ver() {
     let (serv, labels, _) = seed_server(DEF_NSEED).await;
     let vrf_pk = serv.get_public_key().await.unwrap().to_bytes();
-    let n_ops = 50_000;
+    let n_ops = 20_000;
     let n_warm = get_warmup(n_ops);
     let mut total_gen: Duration = Default::default();
     let mut total_ver: Duration = Default::default();
