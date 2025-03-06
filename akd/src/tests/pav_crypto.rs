@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use akd_core::ecvrf::{
     HardCodedAkdVRF as VRF, Proof, VRFExpandedPrivateKey, VRFKeyStorage, VRFPrivateKey,
@@ -104,7 +104,7 @@ fn bench_hash() {
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_vrf_eval() {
     let (vrf_sk, vrf_pk) = init_vrf().await;
-    let mut data: [u8; 32] = [0; 32];
+    let mut data: [u8; 16] = [0; 16];
     let mut rng = StdRng::seed_from_u64(42);
     let n_ops = 50_000;
 
@@ -123,7 +123,7 @@ async fn bench_vrf_eval() {
         &[
             &Metric {
                 n: m0,
-                unit: "ns/op".into(),
+                unit: "us/op".into(),
             },
             &Metric {
                 n: m1,
@@ -136,7 +136,7 @@ async fn bench_vrf_eval() {
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_vrf_prove() {
     let (vrf_sk, vrf_pk) = init_vrf().await;
-    let mut data: [u8; 32] = [0; 32];
+    let mut data: [u8; 16] = [0; 16];
     let mut rng = StdRng::seed_from_u64(42);
     let n_ops = 50_000;
 
@@ -144,8 +144,8 @@ async fn bench_vrf_prove() {
     for _ in 0..n_ops {
         rng.fill(&mut data);
         let p = vrf_sk.prove(&vrf_pk, &data);
-        // byte enc for comparison with pav.
-        let _pb = p.to_bytes();
+        // byte enc for comparison with pav. and bc it's used by AKD that way.
+        p.to_bytes();
     }
     let total = start.elapsed();
 
@@ -157,7 +157,7 @@ async fn bench_vrf_prove() {
         &[
             &Metric {
                 n: m0,
-                unit: "ns/op".into(),
+                unit: "us/op".into(),
             },
             &Metric {
                 n: m1,
@@ -170,22 +170,24 @@ async fn bench_vrf_prove() {
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_vrf_verify() {
     let (vrf_sk, vrf_pk) = init_vrf().await;
-    let mut data: [u8; 32] = [0; 32];
+    let mut data: [u8; 16] = [0; 16];
     let mut rng = StdRng::seed_from_u64(42);
-    let n_ops = 30_000;
+    let n_ops = 50_000;
 
-    let start = Instant::now();
+    let mut total = Duration::default();
     for _ in 0..n_ops {
         rng.fill(&mut data);
         let p0 = vrf_sk.prove(&vrf_pk, &data);
-        // byte enc for comparison with pav.
+        // byte enc for comparison with pav, and bc akd uses it that way.
         let pb = p0.to_bytes();
+
+        let t = Instant::now();
         let p1 = Proof::try_from(&pb[..]).unwrap();
         vrf_pk.verify(&p1, &data).unwrap();
+        total += t.elapsed();
     }
-    let total = start.elapsed();
 
-    let m0 = total.as_micros() as f64;
+    let m0 = total.as_micros() as f64 / n_ops as f64;
     let m1 = total.as_millis() as f64;
     report(
         "bench_vrf_verify".into(),
@@ -193,7 +195,7 @@ async fn bench_vrf_verify() {
         &[
             &Metric {
                 n: m0,
-                unit: "ns/op".into(),
+                unit: "us/op".into(),
             },
             &Metric {
                 n: m1,
