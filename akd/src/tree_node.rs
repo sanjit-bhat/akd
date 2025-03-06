@@ -146,6 +146,7 @@ impl TreeNodeWithPreviousValue {
                 Ok(previous_node.clone())
             } else {
                 // no previous, return not found
+                // TODO: look into this cost.
                 Err(StorageError::NotFound(format!(
                     "TreeNode {:?} at epoch {}",
                     NodeKey(self.label),
