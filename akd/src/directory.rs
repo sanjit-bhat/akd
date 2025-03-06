@@ -1321,14 +1321,14 @@ impl<TC: Configuration, S: Database + 'static, V: VRFKeyStorage> Directory<TC, S
     }
 }
 
-pub fn mk_rand_label() -> AkdLabel {
+fn mk_rand_label() -> AkdLabel {
     // 8 bytes to match pav uint64 uid.
     let mut bytes = vec![0u8; 8];
     rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut bytes);
     AkdLabel(bytes)
 }
 
-pub fn mk_rand_val() -> AkdValue {
+fn mk_rand_val() -> AkdValue {
     // 32 bytes for ed25519 pk.
     let mut v = vec![0; 32];
     rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut v);

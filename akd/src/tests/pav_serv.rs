@@ -735,7 +735,7 @@ async fn bench_serv_scale() {
     }
 }
 
-pub async fn seed_server(
+async fn seed_server(
     n_seed: usize,
 ) -> (Arc<Directory<TC, DB, VRF>>, Arc<Vec<AkdLabel>>, Auditor<TC>) {
     let db = AsyncInMemoryDatabase::new();
@@ -787,21 +787,21 @@ pub async fn seed_server(
     (Arc::new(serv), Arc::new(labels), aud)
 }
 
-pub fn mk_rand_label() -> AkdLabel {
+fn mk_rand_label() -> AkdLabel {
     // 8 bytes to match pav uint64 uid.
-    let mut bytes = vec![0u8; 8];
+    let mut bytes = vec![0; 8];
     rand::thread_rng().fill_bytes(&mut bytes);
     AkdLabel(bytes)
 }
 
-pub fn mk_rand_val() -> AkdValue {
+fn mk_rand_val() -> AkdValue {
     // 32 bytes for ed25519 pk.
     let mut v = vec![0; 32];
     rand::thread_rng().fill_bytes(&mut v);
     AkdValue(v)
 }
 
-pub fn get_warmup(n_ops: i32) -> i32 {
+fn get_warmup(n_ops: i32) -> i32 {
     return (n_ops as f64 * 0.1) as i32;
 }
 
@@ -814,12 +814,12 @@ struct StartEnd {
 // Rust port of
 // https://github.com/aclements/go-moremath/blob/f10218a/stats/sample.go,
 // without weighting.
-pub struct Sample {
+struct Sample {
     xs: Vec<f64>,
 }
 
 impl Sample {
-    pub fn mean(&self) -> f64 {
+    fn mean(&self) -> f64 {
         if self.xs.len() == 0 {
             return f64::NAN;
         }
@@ -847,7 +847,7 @@ impl Sample {
         return m2 / (self.xs.len() - 1) as f64;
     }
 
-    pub fn stddev(&self) -> f64 {
+    fn stddev(&self) -> f64 {
         return self.variance().sqrt();
     }
 
@@ -855,7 +855,7 @@ impl Sample {
         return (f.trunc(), f.fract());
     }
 
-    pub fn quantile(&self, q: f64) -> f64 {
+    fn quantile(&self, q: f64) -> f64 {
         if self.xs.len() == 0 {
             return f64::NAN;
         } else if q <= 0.0 {
@@ -877,18 +877,18 @@ impl Sample {
             + frac * (self.xs[k as usize] - self.xs[(k - 1) as usize]);
     }
 
-    pub fn weight(&self) -> usize {
+    fn weight(&self) -> usize {
         return self.xs.len();
     }
 }
 
-pub struct ClientRunner {
+struct ClientRunner {
     times: Vec<Arc<Mutex<Vec<StartEnd>>>>,
-    pub sample: Sample,
+    sample: Sample,
 }
 
 impl ClientRunner {
-    pub fn new(max_n_cli: usize) -> Self {
+    fn new(max_n_cli: usize) -> Self {
         let mut times = Vec::with_capacity(max_n_cli);
         for _ in 0..max_n_cli {
             times.push(Arc::new(Mutex::new(Vec::with_capacity(1_000_000))));
@@ -899,7 +899,7 @@ impl ClientRunner {
         ClientRunner { times, sample }
     }
 
-    pub async fn run<F, Fut>(&mut self, n_cli: usize, work: F) -> Duration
+    async fn run<F, Fut>(&mut self, n_cli: usize, work: F) -> Duration
     where
         F: Fn() -> Fut + Send + 'static + Clone,
         Fut: Future + Send,
