@@ -138,7 +138,7 @@ async fn test_marker_poc() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn bench_put_genver() {
+async fn bench_put_gen_ver() {
     let (serv, _, _) = seed_server(DEF_NSEED).await;
     let vrf_pk = serv.get_public_key().await.unwrap();
     let n_ops = 50_000;
@@ -185,7 +185,7 @@ async fn bench_put_genver() {
     let m2 = total_ver.as_micros() as f64 / n_ops as f64;
     let m3 = total_ver.as_millis() as f64;
     report(
-        "bench_put_genver".into(),
+        "bench_put_gen_ver".into(),
         n_ops,
         &[
             &Metric {
@@ -294,7 +294,7 @@ async fn bench_put_size() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn bench_get_genver() {
+async fn bench_get_gen_ver() {
     let (serv, labels, _) = seed_server(DEF_NSEED).await;
     let vrf_pk = serv.get_public_key().await.unwrap().to_bytes();
     let n_ops = 50_000;
@@ -329,7 +329,7 @@ async fn bench_get_genver() {
     let m2 = total_ver.as_micros() as f64 / n_ops as f64;
     let m3 = total_ver.as_millis() as f64;
     report(
-        "bench_get_genver".into(),
+        "bench_get_gen_ver".into(),
         n_ops,
         &[
             &Metric {
@@ -433,7 +433,7 @@ async fn bench_get_size() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn bench_selfmon_genver() {
+async fn bench_selfmon_gen_ver() {
     let (serv, labels, _) = seed_server(DEF_NSEED).await;
     let vrf_pk = serv.get_public_key().await.unwrap().to_bytes();
     let n_ops = 50_000;
@@ -479,7 +479,7 @@ async fn bench_selfmon_genver() {
     let m2 = total_ver.as_micros() as f64 / n_ops as f64;
     let m3 = total_ver.as_millis() as f64;
     report(
-        "bench_selfmon_genver".into(),
+        "bench_selfmon_gen_ver".into(),
         n_ops,
         &[
             &Metric {
@@ -579,7 +579,7 @@ async fn bench_selfmon_size() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn bench_audit_genver() {
+async fn bench_audit_gen_ver() {
     let (serv, _, mut aud) = seed_server(DEF_NSEED).await;
     let n_ops = 300;
     let n_warm = get_warmup(n_ops);
@@ -619,7 +619,7 @@ async fn bench_audit_genver() {
     let m2 = total_ver.as_micros() as f64 / n_ops as f64;
     let m3 = total_ver.as_millis() as f64;
     report(
-        "bench_audit_batch".into(),
+        "bench_audit_gen_ver".into(),
         n_ops,
         &[
             &Metric {
