@@ -544,8 +544,11 @@ pub mod log {
 #[cfg(feature = "public_auditing")]
 pub mod local_auditing;
 
+#[cfg(feature = "public_auditing")]
+pub use akd_core::proto;
+
 pub use akd_core::{
-    configuration, configuration::*, ecvrf, hash, hash::Digest, proto, types::*, verify,
+    configuration, configuration::*, ecvrf, hash, hash::Digest, types::*, verify,
     verify::history::HistoryParams, ARITY,
 };
 
