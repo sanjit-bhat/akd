@@ -35,7 +35,7 @@ pub fn verify_membership_for_tests_only<TC: Configuration>(
     verify_membership::<TC>(root_hash, proof)
 }
 
-pub(crate) fn verify_membership<TC: Configuration>(
+pub fn verify_membership<TC: Configuration>(
     root_hash: Digest,
     proof: &MembershipProof,
 ) -> Result<(), VerificationError> {
@@ -85,7 +85,7 @@ pub fn verify_nonmembership_for_tests_only<TC: Configuration>(
     verify_nonmembership::<TC>(root_hash, proof)
 }
 
-pub(crate) fn verify_nonmembership<TC: Configuration>(
+pub fn verify_nonmembership<TC: Configuration>(
     root_hash: Digest,
     proof: &NonMembershipProof,
 ) -> Result<(), VerificationError> {
