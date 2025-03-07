@@ -1,4 +1,4 @@
-use akd_core::verify::base::{verify_membership, verify_nonmembership};
+use akd_core::verify::base::verify_membership;
 use rand::prelude::IteratorRandom;
 use rand::RngCore;
 use std::time::{Duration, Instant};
@@ -61,7 +61,7 @@ async fn bench_merk_insert() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn bench_merk_memb_gen_ver() {
+async fn bench_merk_gen_ver() {
     let (store, tr, labels) = seed_tr().await;
     let n_ops = 500_000;
 
@@ -89,59 +89,7 @@ async fn bench_merk_memb_gen_ver() {
     let m2 = total_ver.as_micros() as f64 / n_ops as f64;
     let m3 = total_ver.as_millis() as f64;
     report(
-        "bench_merk_memb_gen_ver".into(),
-        n_ops,
-        &[
-            &Metric {
-                n: m0,
-                unit: "us/op(gen)".into(),
-            },
-            &Metric {
-                n: m1,
-                unit: "total(ms,gen)".into(),
-            },
-            &Metric {
-                n: m2,
-                unit: "us/op(ver)".into(),
-            },
-            &Metric {
-                n: m3,
-                unit: "total(ms,ver)".into(),
-            },
-        ],
-    );
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn bench_merk_nonmemb_gen_ver() {
-    let (store, tr, _) = seed_tr().await;
-    let n_ops = 500_000;
-
-    let mut total_gen = Duration::default();
-    let mut total_ver = Duration::default();
-    for _ in 0..n_ops {
-        let l = mk_rand_label();
-
-        let t0 = Instant::now();
-        let p = tr
-            .get_non_membership_proof::<TC, _>(&store, l.clone())
-            .await
-            .unwrap();
-        total_gen += t0.elapsed();
-
-        let dig = tr.get_root_hash::<TC, _>(&store).await.unwrap();
-
-        let t1 = Instant::now();
-        verify_nonmembership::<TC>(dig, &p).unwrap();
-        total_ver += t1.elapsed();
-    }
-
-    let m0 = total_gen.as_micros() as f64 / n_ops as f64;
-    let m1 = total_gen.as_millis() as f64;
-    let m2 = total_ver.as_micros() as f64 / n_ops as f64;
-    let m3 = total_ver.as_millis() as f64;
-    report(
-        "bench_merk_nonmemb_gen_ver".into(),
+        "bench_merk_gen_ver".into(),
         n_ops,
         &[
             &Metric {
