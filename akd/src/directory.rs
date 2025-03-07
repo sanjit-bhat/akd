@@ -553,11 +553,9 @@ where
                 marker_labels.push(node_label);
             }
 
-            /*
             current_azks
                 .preload_lookup_nodes(&self.storage, &lookup_infos, Some(marker_labels))
                 .await?;
-            */
         }
 
         // The creation of update proofs should happen only after the preload operation (to prevent cache misses).

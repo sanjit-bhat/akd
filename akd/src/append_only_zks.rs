@@ -344,6 +344,7 @@ impl Azks {
         let azks_element_set = AzksElementSet::from(nodes);
 
         // preload the nodes that we will visit during the insertion
+        // pav change: no preload.
         /*
         let (fallible_load_count, time_s) =
             tic_toc(self.preload_nodes(storage, &azks_element_set, parallelism_config)).await;
@@ -921,6 +922,7 @@ impl Azks {
         // Suppose the epochs start_epoch and end_epoch exist in the set.
         // This function should return the proof that nothing was removed/changed from the tree
         // between these epochs.
+        // pav change: no preload.
         /*
         let (fallible_load_count, time_s) = tic_toc(self.preload_audit_nodes::<_>(
             storage,
@@ -1108,6 +1110,7 @@ impl Azks {
                 // this is the case where the root is unchanged since the last epoch
                 return Ok((unchanged, leaves));
             }
+            // pav change: stateful auditors already have unchanged nodes.
             /*
             unchanged.push(AzksElement {
                 label: node.label,

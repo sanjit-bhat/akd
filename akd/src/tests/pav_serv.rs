@@ -789,16 +789,16 @@ async fn seed_server(
 
 fn mk_rand_label() -> AkdLabel {
     // 8 bytes to match pav uint64 uid.
-    let mut bytes = vec![0; 8];
-    rand::thread_rng().fill_bytes(&mut bytes);
-    AkdLabel(bytes)
+    let mut b = vec![0; 8];
+    rand::thread_rng().fill_bytes(&mut b);
+    AkdLabel(b)
 }
 
 fn mk_rand_val() -> AkdValue {
     // 32 bytes for ed25519 pk.
-    let mut v = vec![0; 32];
-    rand::thread_rng().fill_bytes(&mut v);
-    AkdValue(v)
+    let mut b = vec![0; 32];
+    rand::thread_rng().fill_bytes(&mut b);
+    AkdValue(b)
 }
 
 fn get_warmup(n_ops: i32) -> i32 {

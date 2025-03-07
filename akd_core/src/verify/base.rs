@@ -141,7 +141,7 @@ pub(crate) fn verify_nonmembership<TC: Configuration>(
 /// This function is called to verify that a given [NodeLabel] is indeed
 /// the VRF for a given version (fresh or stale) for a [AkdLabel].
 /// Hence, it also takes as input the server's public key.
-fn verify_label<TC: Configuration>(
+pub fn verify_label<TC: Configuration>(
     vrf_public_key: &[u8],
     akd_label: &AkdLabel,
     freshness: VersionFreshness,
