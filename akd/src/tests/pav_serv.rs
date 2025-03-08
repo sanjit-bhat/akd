@@ -579,21 +579,37 @@ async fn bench_selfmon_size() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn bench_audit_gen_ver() {
+async fn bench_audit_scale() {
+    let cfgs = vec![
+        (1, 10_000),
+        (2, 10_000),
+        (5, 10_000),
+        (10, 10_000),
+        (20, 10_000),
+        (50, 1_000),
+        (100, 1_000),
+        (200, 1_000),
+        (500, 500),
+        (1_000, 300),
+    ];
+    for (batch_sz, n_batches) in cfgs.into_iter() {
+        audit_scale_helper(batch_sz, n_batches).await;
+    }
+}
+
+async fn audit_scale_helper(batch_sz: i32, n_batches: i32) {
     let (serv, _, mut aud) = seed_server(DEF_NSEED).await;
-    let n_ops = 300;
-    let n_warm = get_warmup(n_ops);
-    let n_insert = 1_000;
+    let n_warm = get_warmup(batch_sz);
 
     let mut total_gen: Duration = Default::default();
     let mut total_ver: Duration = Default::default();
-    for i in 0..n_warm + n_ops {
+    for i in 0..n_warm + n_batches {
         if i == n_warm {
             total_gen = Default::default();
             total_ver = Default::default();
         }
         let start_dig = serv.get_epoch_hash().await.unwrap();
-        let new_els: Vec<(AkdLabel, AkdValue)> = (0..n_insert)
+        let new_els: Vec<(AkdLabel, AkdValue)> = (0..batch_sz)
             .map(|_| (mk_rand_label(), mk_rand_val()))
             .collect();
         let end_dig = serv.publish(new_els).await.unwrap();
@@ -614,13 +630,13 @@ async fn bench_audit_gen_ver() {
         total_ver += t2 - t1;
     }
 
-    let m0 = total_gen.as_micros() as f64 / n_ops as f64;
+    let m0 = total_gen.as_micros() as f64 / n_batches as f64;
     let m1 = total_gen.as_millis() as f64;
-    let m2 = total_ver.as_micros() as f64 / n_ops as f64;
+    let m2 = total_ver.as_micros() as f64 / n_batches as f64;
     let m3 = total_ver.as_millis() as f64;
     report(
-        "bench_audit_gen_ver".into(),
-        n_ops,
+        "bench_audit_scale".into(),
+        batch_sz,
         &[
             &Metric {
                 n: m0,
