@@ -599,7 +599,7 @@ async fn bench_audit_scale() {
 
 async fn audit_scale_helper(batch_sz: i32, n_batches: i32) {
     let (serv, _, mut aud) = seed_server(DEF_NSEED).await;
-    let n_warm = get_warmup(batch_sz);
+    let n_warm = get_warmup(n_batches);
 
     let mut total_gen: Duration = Default::default();
     let mut total_ver: Duration = Default::default();
