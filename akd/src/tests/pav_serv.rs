@@ -275,9 +275,8 @@ async fn put_batch_helper(serv: &Arc<Directory<TC, DB, VRF>>, batch_sz: i32) -> 
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_put_size() {
     let (serv, labels, _) = seed_server(DEF_NSEED).await;
-    let l = &labels[0];
     let (p, dig) = serv
-        .key_history(&l, HistoryParams::MostRecent(1))
+        .key_history(&labels[0], HistoryParams::MostRecent(1))
         .await
         .unwrap();
     let pb = bincode::serialize(&p).unwrap();
@@ -406,30 +405,22 @@ async fn bench_get_scale() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_get_size() {
-    let (serv, _labels, _) = seed_server(DEF_NSEED).await;
-    let max_n_vers = 10;
-    let label = mk_rand_label();
-
-    for n_vers in 1..=max_n_vers {
-        let elem = vec![(label.clone(), mk_rand_val())];
-        serv.publish(elem.clone()).await.unwrap();
-
-        let (p, dig) = serv.lookup(label.clone()).await.unwrap();
-        if p.version != n_vers {
-            panic!("wrong version");
-        }
-        let pb = bincode::serialize(&p).unwrap();
-        let digb = bincode::serialize(&dig).unwrap();
-        let sz = (pb.len() + digb.len()) as f64;
-        report(
-            "bench_get_size".into(),
-            n_vers as i32,
-            &[&Metric {
-                n: sz,
-                unit: "B".into(),
-            }],
-        );
+    let (serv, labels, _) = seed_server(DEF_NSEED).await;
+    let (p, dig) = serv.lookup(labels[0].clone()).await.unwrap();
+    if p.version != 1 {
+        panic!("wrong version");
     }
+    let pb = bincode::serialize(&p).unwrap();
+    let digb = bincode::serialize(&dig).unwrap();
+    let sz = (pb.len() + digb.len()) as f64;
+    report(
+        "bench_get_size".into(),
+        1,
+        &[&Metric {
+            n: sz,
+            unit: "B".into(),
+        }],
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -560,9 +551,8 @@ async fn bench_selfmon_scale() {
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_selfmon_size() {
     let (serv, labels, _) = seed_server(DEF_NSEED).await;
-    let l = &labels[0];
     let (p, dig) = serv
-        .key_history(&l, HistoryParams::MostRecent(0))
+        .key_history(&labels[0], HistoryParams::MostRecent(0))
         .await
         .unwrap();
     let pb = bincode::serialize(&p).unwrap();
@@ -661,13 +651,9 @@ async fn audit_scale_helper(batch_sz: i32, n_batches: i32) {
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_audit_size() {
     let (serv, _, _) = seed_server(DEF_NSEED).await;
-    let n_insert = 1_000;
-
     let start_dig = serv.get_epoch_hash().await.unwrap();
-    let new_els: Vec<(AkdLabel, AkdValue)> = (0..n_insert)
-        .map(|_| (mk_rand_label(), mk_rand_val()))
-        .collect();
-    let end_dig = serv.publish(new_els).await.unwrap();
+    let elem = vec![(mk_rand_label(), mk_rand_val())];
+    let end_dig = serv.publish(elem).await.unwrap();
     let p = serv
         .audit(start_dig.epoch(), end_dig.epoch())
         .await
