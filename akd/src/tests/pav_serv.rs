@@ -672,68 +672,36 @@ async fn bench_audit_size() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn bench_serv_scale() {
+async fn bench_serv_mem() {
     let db = AsyncInMemoryDatabase::new();
     let store = StorageManager::new_no_cache(db);
     let vrf = VRF {};
     let serv = Directory::<TC, _, _>::new(store, vrf, PAR_CFG)
         .await
         .unwrap();
-    let n_insert = 500_000_000;
+    let n_total = 500_000_000;
     let n_measure = 1_000_000;
-    let n_ops = 10_000;
-    let n_warm = get_warmup(n_ops);
-    let n_rem = n_measure as i32 - n_warm - n_ops;
 
     let mut sys_info = sysinfo::System::new();
     let pid = sysinfo::get_current_pid().unwrap();
     sys_info.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[pid]), true);
-    sys_info.refresh_memory();
 
-    for i in (0..n_insert).step_by(n_measure) {
+    for i in (0..n_total).step_by(n_measure) {
         sys_info.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[pid]), true);
-        sys_info.refresh_memory();
-
-        let mut start = Instant::now();
-        for j in 0..n_warm + n_ops {
-            if j == n_warm {
-                start = Instant::now();
-            }
-            let l = mk_rand_label();
-            let elem = vec![(l.clone(), mk_rand_val())];
-            serv.publish(elem).await.unwrap();
-            serv.key_history(&l, HistoryParams::MostRecent(1))
-                .await
-                .unwrap();
-        }
-        let total = start.elapsed();
-
-        let rem: Vec<(AkdLabel, AkdValue)> = (0..n_rem)
-            .map(|_| (mk_rand_label(), mk_rand_val()))
-            .collect();
-        serv.publish(rem).await.unwrap();
-
-        let lat = total.as_micros() as f64 / n_ops as f64;
-        let mb0 = sys_info.process(pid).unwrap().memory() as f64 / 1_000_000.0;
-        let mb1 = sys_info.used_memory() as f64 / 1_000_000.0;
+        let mb = sys_info.process(pid).unwrap().memory() as f64 / 1_000_000.0;
         report(
             "bench_serv_scale".into(),
             i as i32,
-            &[
-                &Metric {
-                    n: lat,
-                    unit: "us/op".into(),
-                },
-                &Metric {
-                    n: mb0,
-                    unit: "MB(proc)".into(),
-                },
-                &Metric {
-                    n: mb1,
-                    unit: "MB(sys)".into(),
-                },
-            ],
+            &[&Metric {
+                n: mb,
+                unit: "MB".into(),
+            }],
         );
+
+        let work: Vec<(AkdLabel, AkdValue)> = (0..n_measure)
+            .map(|_| (mk_rand_label(), mk_rand_val()))
+            .collect();
+        serv.publish(work).await.unwrap();
     }
 }
 
