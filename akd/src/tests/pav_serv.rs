@@ -210,29 +210,32 @@ async fn bench_put_gen_ver() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_put_batch() {
-    for batch_sz in [
-        1, 2, 5, 10, 20, 50, 100, 200, 500, 1_000, 2_000, 5_000, 10_000, 20_000, 50_000, 100_000,
-    ] {
-        let (serv, _labels, _) = seed_server(DEF_NSEED).await;
-        let (total, n_batches) = put_batch_helper(&serv, batch_sz).await;
-
-        let tput = (n_batches * batch_sz) as f64 / total.as_secs_f64();
-        let lat = total.as_micros() as f64 / n_batches as f64;
-        let overall = total.as_millis() as f64;
+    let cfgs = vec![
+        (1, 50_000),
+        (2, 50_000),
+        (5, 10_000),
+        (10, 10_000),
+        (20, 10_000),
+        (50, 5_000),
+        (100, 3_000),
+        (200, 1_500),
+        (500, 500),
+        (1_000, 300),
+    ];
+    for (batch_sz, n_batches) in cfgs.into_iter() {
+        let total = put_batch_helper(batch_sz, n_batches).await;
+        let m0 = total.as_micros() as f64 / n_batches as f64;
+        let m1 = total.as_millis() as f64;
         report(
             "bench_put_batch".into(),
             batch_sz,
             &[
                 &Metric {
-                    n: tput,
+                    n: m0,
                     unit: "op/s".into(),
                 },
                 &Metric {
-                    n: lat,
-                    unit: "us/batch".into(),
-                },
-                &Metric {
-                    n: overall,
+                    n: m1,
                     unit: "total(ms)".into(),
                 },
             ],
@@ -240,8 +243,8 @@ async fn bench_put_batch() {
     }
 }
 
-async fn put_batch_helper(serv: &Arc<Directory<TC, DB, VRF>>, batch_sz: i32) -> (Duration, i32) {
-    let n_batches = 20;
+async fn put_batch_helper(batch_sz: i32, n_batches: i32) -> Duration {
+    let (serv, _, _) = seed_server(DEF_NSEED).await;
     let n_warm = get_warmup(n_batches);
 
     let mut start = Instant::now();
@@ -268,8 +271,7 @@ async fn put_batch_helper(serv: &Arc<Directory<TC, DB, VRF>>, batch_sz: i32) -> 
             let _ = res.unwrap();
         }
     }
-    let total = start.elapsed();
-    (total, n_batches)
+    start.elapsed()
 }
 
 #[tokio::test(flavor = "multi_thread")]
