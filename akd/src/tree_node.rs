@@ -16,8 +16,6 @@ use crate::AzksValue;
 use crate::PrefixOrdering;
 use crate::{node_label::*, Direction};
 use akd_core::configuration::Configuration;
-#[cfg(feature = "serde_serialization")]
-use akd_core::utils::serde_helpers::{azks_value_hex_deserialize, azks_value_hex_serialize};
 use std::cmp::{max, min};
 use std::convert::TryInto;
 use std::marker::Sync;
@@ -242,14 +240,6 @@ pub struct TreeNode {
     /// Label of the right child, None if there is none.
     pub right_child: Option<NodeLabel>,
     /// Hash (aka state) of the node.
-    #[cfg_attr(
-        feature = "serde_serialization",
-        serde(serialize_with = "azks_value_hex_serialize")
-    )]
-    #[cfg_attr(
-        feature = "serde_serialization",
-        serde(deserialize_with = "azks_value_hex_deserialize")
-    )]
     pub hash: AzksValue, // FIXME: we should rename this field to "value" (but it will affect fixture generation)
 }
 
