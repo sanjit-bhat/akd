@@ -7,7 +7,7 @@ use akd_core::{AzksElement, AzksValue, NodeLabel};
 
 use akd::storage::memory::AsyncInMemoryDatabase as DB;
 
-use akd::benchutil::{report, Metric};
+use akd::benchutil::*;
 use akd::{
     append_only_zks::{AzksParallelismConfig, AzksParallelismOption, InsertMode},
     storage::{manager::StorageManager, memory::AsyncInMemoryDatabase},
@@ -27,7 +27,7 @@ const PAR_CFG: AzksParallelismConfig = AzksParallelismConfig {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_merk_insert() {
-    let (store, mut tr, _) = seed_tr().await;
+    let (store, mut tr, _) = seed_tr(DEF_NSEED).await;
     let n_ops = 100_000;
 
     let start = Instant::now();
@@ -62,7 +62,7 @@ async fn bench_merk_insert() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn bench_merk_gen_ver() {
-    let (store, tr, labels) = seed_tr().await;
+    let (store, tr, labels) = seed_tr(DEF_NSEED).await;
     let n_ops = 500_000;
 
     let mut total_gen = Duration::default();
@@ -112,12 +112,36 @@ async fn bench_merk_gen_ver() {
     );
 }
 
-async fn seed_tr() -> (StorageManager<DB>, Azks, Vec<NodeLabel>) {
+#[tokio::test(flavor = "multi_thread")]
+async fn bench_merk_size() {
+    let (store, tr, labels) = seed_tr(DEF_NSEED).await;
+    let mut samp = Sample {
+        xs: Vec::with_capacity(DEF_NSEED),
+    };
+    for label in labels {
+        let p = tr
+            .get_membership_proof::<TC, _>(&store, label)
+            .await
+            .unwrap();
+        let pb = bincode::serialize(&p).unwrap();
+        samp.xs.push(pb.len() as f64);
+    }
+    report(
+        "bench_merk_size".into(),
+        1,
+        &[&Metric {
+            n: samp.mean().round(),
+            unit: "B".into(),
+        }],
+    )
+}
+
+async fn seed_tr(n_seed: usize) -> (StorageManager<DB>, Azks, Vec<NodeLabel>) {
     let db = AsyncInMemoryDatabase::new();
     let store = StorageManager::new_no_cache(db);
     let mut tr = Azks::new::<TC, _>(&store).await.unwrap();
 
-    let labels: Vec<NodeLabel> = (0..DEF_NSEED).map(|_| mk_rand_label()).collect();
+    let labels: Vec<NodeLabel> = (0..n_seed).map(|_| mk_rand_label()).collect();
     let seed: Vec<AzksElement> = labels
         .clone()
         .into_iter()

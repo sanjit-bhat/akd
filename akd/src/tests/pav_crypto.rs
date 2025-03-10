@@ -193,3 +193,22 @@ async fn bench_label_gen_ver() {
         ],
     );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn bench_label_size() {
+    let uid = AkdLabel(vec![0; 8]);
+    let vrf_sk = VRF {};
+    let p = vrf_sk
+        .get_label_proof::<TC>(&uid, VersionFreshness::Fresh, 1)
+        .await
+        .unwrap();
+    let pb = p.to_bytes();
+    report(
+        "bench_label_size".into(),
+        1,
+        &[&Metric {
+            n: pb.len() as f64,
+            unit: "B".into(),
+        }],
+    );
+}

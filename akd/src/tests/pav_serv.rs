@@ -20,7 +20,7 @@ use akd_core::verify::history::HistoryParams;
 use akd_core::verify::{key_history_verify, lookup_verify, HistoryVerificationParams};
 use akd_core::{AkdLabel, AkdValue};
 
-use akd::benchutil::{report, Metric};
+use akd::benchutil::*;
 use akd::{
     append_only_zks::{AzksParallelismConfig, AzksParallelismOption},
     auditor::Auditor,
@@ -779,77 +779,6 @@ fn get_warmup(n_ops: i32) -> i32 {
 struct StartEnd {
     start: Instant,
     end: Instant,
-}
-
-// Rust port of
-// https://github.com/aclements/go-moremath/blob/f10218a/stats/sample.go,
-// without weighting.
-struct Sample {
-    xs: Vec<f64>,
-}
-
-impl Sample {
-    fn mean(&self) -> f64 {
-        if self.xs.len() == 0 {
-            return f64::NAN;
-        }
-        let mut m: f64 = 0.0;
-        for (i, x) in self.xs.iter().enumerate() {
-            m += (x - m) / (i + 1) as f64;
-        }
-        m
-    }
-
-    fn variance(&self) -> f64 {
-        if self.xs.len() == 0 {
-            return f64::NAN;
-        } else if self.xs.len() <= 1 {
-            return 0.0;
-        }
-
-        let mut mean = 0.0;
-        let mut m2 = 0.0;
-        for (n, x) in self.xs.iter().enumerate() {
-            let delta = x - mean;
-            mean += delta / (n + 1) as f64;
-            m2 += delta * (x - mean);
-        }
-        return m2 / (self.xs.len() - 1) as f64;
-    }
-
-    fn stddev(&self) -> f64 {
-        return self.variance().sqrt();
-    }
-
-    fn golang_modf(f: f64) -> (f64, f64) {
-        return (f.trunc(), f.fract());
-    }
-
-    fn quantile(&self, q: f64) -> f64 {
-        if self.xs.len() == 0 {
-            return f64::NAN;
-        } else if q <= 0.0 {
-            return *self.xs.first().unwrap();
-        } else if q >= 1.0 {
-            return *self.xs.last().unwrap();
-        }
-
-        let big_n = self.xs.len() as f64;
-        let n = 1.0 / 3.0 + q * (big_n + 1.0 / 3.0);
-        let (kf, frac) = Self::golang_modf(n);
-        let k = kf as i64;
-        if k <= 0 {
-            return *self.xs.first().unwrap();
-        } else if k as usize >= self.xs.len() {
-            return *self.xs.last().unwrap();
-        }
-        return self.xs[(k - 1) as usize]
-            + frac * (self.xs[k as usize] - self.xs[(k - 1) as usize]);
-    }
-
-    fn weight(&self) -> usize {
-        return self.xs.len();
-    }
 }
 
 struct ClientRunner {
