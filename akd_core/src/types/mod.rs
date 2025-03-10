@@ -13,11 +13,6 @@
 //! 3. Audit (append-only)
 
 use crate::hash::Digest;
-#[cfg(feature = "serde_serialization")]
-use crate::utils::serde_helpers::{
-    azks_value_hex_deserialize, azks_value_hex_serialize, bytes_deserialize_hex,
-    bytes_serialize_hex,
-};
 use crate::ARITY;
 
 #[cfg(feature = "nostd")]
@@ -159,17 +154,7 @@ impl Direction {
     feature = "serde_serialization",
     derive(serde::Serialize, serde::Deserialize)
 )]
-pub struct AkdLabel(
-    #[cfg_attr(
-        feature = "serde_serialization",
-        serde(serialize_with = "bytes_serialize_hex")
-    )]
-    #[cfg_attr(
-        feature = "serde_serialization",
-        serde(deserialize_with = "bytes_deserialize_hex")
-    )]
-    pub Vec<u8>,
-);
+pub struct AkdLabel(pub Vec<u8>);
 
 impl SizeOf for AkdLabel {
     fn size_of(&self) -> usize {
@@ -219,17 +204,7 @@ impl AkdLabel {
     feature = "serde_serialization",
     derive(serde::Serialize, serde::Deserialize)
 )]
-pub struct AkdValue(
-    #[cfg_attr(
-        feature = "serde_serialization",
-        serde(serialize_with = "bytes_serialize_hex")
-    )]
-    #[cfg_attr(
-        feature = "serde_serialization",
-        serde(deserialize_with = "bytes_deserialize_hex")
-    )]
-    pub Vec<u8>,
-);
+pub struct AkdValue(pub Vec<u8>);
 
 impl SizeOf for AkdValue {
     fn size_of(&self) -> usize {
@@ -318,14 +293,6 @@ pub struct AzksElement {
     /// The label of the node
     pub label: NodeLabel,
     /// The associated hash of the node
-    #[cfg_attr(
-        feature = "serde_serialization",
-        serde(serialize_with = "azks_value_hex_serialize")
-    )]
-    #[cfg_attr(
-        feature = "serde_serialization",
-        serde(deserialize_with = "azks_value_hex_deserialize")
-    )]
     pub value: AzksValue,
 }
 

@@ -10,8 +10,6 @@
 
 use crate::{configuration::Configuration, PrefixOrdering, SizeOf};
 
-#[cfg(feature = "serde_serialization")]
-use crate::utils::serde_helpers::{bytes_deserialize_hex, bytes_serialize_hex};
 #[cfg(feature = "nostd")]
 use alloc::format;
 #[cfg(feature = "nostd")]
@@ -29,14 +27,6 @@ mod tests;
     derive(serde::Serialize, serde::Deserialize)
 )]
 pub struct NodeLabel {
-    #[cfg_attr(
-        feature = "serde_serialization",
-        serde(serialize_with = "bytes_serialize_hex")
-    )]
-    #[cfg_attr(
-        feature = "serde_serialization",
-        serde(deserialize_with = "bytes_deserialize_hex")
-    )]
     /// Stores a binary string as a 32-byte array of `u8`s
     pub label_val: [u8; 32],
     /// len keeps track of how long the binary string is in bits
