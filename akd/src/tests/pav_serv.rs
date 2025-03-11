@@ -692,7 +692,7 @@ async fn bench_serv_mem() {
         sys_info.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[pid]), true);
         let mb = sys_info.process(pid).unwrap().memory() as f64 / 1_000_000.0;
         report(
-            "bench_serv_scale".into(),
+            "bench_serv_mem".into(),
             i as i32,
             &[&Metric {
                 n: mb,

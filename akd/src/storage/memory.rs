@@ -15,6 +15,7 @@ use crate::storage::types::{
 };
 use crate::storage::{Database, Storable, StorageUtil};
 use crate::{AkdLabel, AkdValue};
+use akd_core::SizeOf;
 use async_trait::async_trait;
 use dashmap::DashMap;
 use std::collections::HashMap;
@@ -39,6 +40,25 @@ impl AsyncInMemoryDatabase {
     /// Creates a new in memory db
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn size(&self) -> (usize, usize, usize, usize) {
+        let mut db_sz: usize = 0;
+        let mut user_sz: usize = 0;
+
+        for x in self.db.iter() {
+            db_sz += x.key().len();
+            db_sz += x.value().size_of();
+        }
+
+        for x in self.user_info.iter() {
+            user_sz += x.key().len();
+            for (_, y) in x.value().iter() {
+                user_sz += 8;
+                user_sz += y.size_of();
+            }
+        }
+        (db_sz, user_sz, self.db.len(), self.db.capacity())
     }
 
     #[cfg(test)]
