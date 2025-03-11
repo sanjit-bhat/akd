@@ -224,7 +224,7 @@ async fn bench_put_batch() {
     ];
     for (batch_sz, n_batches) in cfgs.into_iter() {
         let total = put_batch_helper(batch_sz, n_batches).await;
-        let m0 = total.as_micros() as f64 / n_batches as f64;
+        let m0 = (batch_sz * n_batches) as f64 / total.as_secs_f64();
         let m1 = total.as_millis() as f64;
         report(
             "bench_put_batch".into(),
@@ -622,9 +622,9 @@ async fn audit_scale_helper(batch_sz: i32, n_batches: i32) {
         total_ver += t2 - t1;
     }
 
-    let m0 = total_gen.as_micros() as f64 / n_batches as f64;
+    let m0 = (batch_sz * n_batches) as f64 / total_gen.as_secs_f64();
     let m1 = total_gen.as_millis() as f64;
-    let m2 = total_ver.as_micros() as f64 / n_batches as f64;
+    let m2 = (batch_sz * n_batches) as f64 / total_ver.as_secs_f64();
     let m3 = total_ver.as_millis() as f64;
     report(
         "bench_audit_scale".into(),
@@ -632,7 +632,7 @@ async fn audit_scale_helper(batch_sz: i32, n_batches: i32) {
         &[
             &Metric {
                 n: m0,
-                unit: "us/op(gen)".into(),
+                unit: "op/s(gen)".into(),
             },
             &Metric {
                 n: m1,
@@ -640,7 +640,7 @@ async fn audit_scale_helper(batch_sz: i32, n_batches: i32) {
             },
             &Metric {
                 n: m2,
-                unit: "us/op(ver)".into(),
+                unit: "op/s(ver)".into(),
             },
             &Metric {
                 n: m3,
