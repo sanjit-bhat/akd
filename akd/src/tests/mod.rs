@@ -10,6 +10,7 @@
 mod test_core_protocol;
 mod test_errors;
 mod test_preloads;
+mod test_cli;
 
 use std::collections::HashMap;
 
