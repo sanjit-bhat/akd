@@ -1,6 +1,14 @@
 use akd_core::utils::get_marker_versions;
 
 #[test]
+fn test_markers() {
+    for i in 1..=32 {
+        let (past, fut) = get_marker_versions(i, i, 500_000);
+        println!("{}: {:?} {:?}", i, past, fut);
+    }
+}
+
+#[test]
 fn test_hist_intersec() {
     let max_scan = 129;
     // assume both clients use the same epoch.
